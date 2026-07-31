@@ -9,8 +9,12 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.BaseAdapter
 import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.Switch
 import android.widget.TextView
@@ -31,6 +35,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var blockedList: ListView
     private lateinit var clearLogButton: Button
     private lateinit var refreshButton: Button
+    private lateinit var areaCodeInput: EditText
+    private lateinit var addAreaCodeButton: Button
+    private lateinit var areaCodesEmpty: TextView
+    private lateinit var areaCodesContainer: LinearLayout
 
     private val prefs by lazy { getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
     private val dateFormat: DateFormat by lazy {
@@ -51,7 +59,6 @@ class MainActivity : AppCompatActivity() {
                     R.string.call_screening_not_granted,
                     Toast.LENGTH_LONG
                 ).show()
-                // Keep toggle on — user can grant later from system settings
             }
         }
 
@@ -66,6 +73,10 @@ class MainActivity : AppCompatActivity() {
         blockedList = findViewById(R.id.blockedList)
         clearLogButton = findViewById(R.id.clearLogButton)
         refreshButton = findViewById(R.id.refreshButton)
+        areaCodeInput = findViewById(R.id.areaCodeInput)
+        addAreaCodeButton = findViewById(R.id.addAreaCodeButton)
+        areaCodesEmpty = findViewById(R.id.areaCodesEmpty)
+        areaCodesContainer = findViewById(R.id.areaCodesContainer)
 
         toggle.isChecked = prefs.getBoolean(KEY_ENABLED, false)
 
@@ -76,6 +87,16 @@ class MainActivity : AppCompatActivity() {
                 requestCallScreeningRole()
             }
             refreshStatus()
+        }
+
+        addAreaCodeButton.setOnClickListener { addAreaCodeFromInput() }
+        areaCodeInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO) {
+                addAreaCodeFromInput()
+                true
+            } else {
+                false
+            }
         }
 
         clearLogButton.setOnClickListener {
@@ -98,6 +119,7 @@ class MainActivity : AppCompatActivity() {
         refreshButton.setOnClickListener {
             refreshStatus()
             refreshLog()
+            refreshAreaCodes()
             Toast.makeText(this, R.string.refreshed, Toast.LENGTH_SHORT).show()
         }
 
@@ -111,6 +133,65 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshStatus()
         refreshLog()
+        refreshAreaCodes()
+    }
+
+    private fun addAreaCodeFromInput() {
+        val raw = areaCodeInput.text?.toString().orEmpty()
+        when (val result = AreaCodeAllowlist.add(this, raw)) {
+            is AreaCodeAllowlist.AddResult.Added -> {
+                areaCodeInput.text?.clear()
+                hideKeyboard()
+                refreshAreaCodes()
+                refreshStatus()
+                Toast.makeText(
+                    this,
+                    getString(R.string.area_code_added, result.code),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            AreaCodeAllowlist.AddResult.Invalid -> {
+                Toast.makeText(this, R.string.area_code_invalid, Toast.LENGTH_SHORT).show()
+            }
+            AreaCodeAllowlist.AddResult.Duplicate -> {
+                val code = AreaCodeAllowlist.normalizeCode(raw) ?: raw
+                Toast.makeText(
+                    this,
+                    getString(R.string.area_code_duplicate, code),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            AreaCodeAllowlist.AddResult.Full -> {
+                Toast.makeText(this, R.string.area_code_full, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun refreshAreaCodes() {
+        val codes = AreaCodeAllowlist.load(this)
+        areaCodesContainer.removeAllViews()
+        if (codes.isEmpty()) {
+            areaCodesEmpty.visibility = View.VISIBLE
+            return
+        }
+        areaCodesEmpty.visibility = View.GONE
+        val inflater = LayoutInflater.from(this)
+        for (code in codes) {
+            val row = inflater.inflate(R.layout.item_area_code, areaCodesContainer, false)
+            row.findViewById<TextView>(R.id.areaCodeLabel).text =
+                getString(R.string.area_code_row, code)
+            row.findViewById<Button>(R.id.removeAreaCodeButton).setOnClickListener {
+                AreaCodeAllowlist.remove(this, code)
+                refreshAreaCodes()
+                refreshStatus()
+                Toast.makeText(
+                    this,
+                    getString(R.string.area_code_removed, code),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            areaCodesContainer.addView(row)
+        }
     }
 
     private fun refreshStatus() {
@@ -118,6 +199,7 @@ class MainActivity : AppCompatActivity() {
         val roleHeld = isCallScreeningRoleHeld()
         val contactsOk = hasPermission(Manifest.permission.READ_CONTACTS)
         val smsOk = hasPermission(Manifest.permission.RECEIVE_SMS)
+        val areaCodes = AreaCodeAllowlist.load(this)
 
         val lines = mutableListOf<String>()
         lines += if (enabled) getString(R.string.status_blocking_on) else getString(R.string.status_blocking_off)
@@ -135,6 +217,11 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.status_sms_ok)
         } else {
             getString(R.string.status_sms_missing)
+        }
+        lines += if (areaCodes.isEmpty()) {
+            getString(R.string.status_area_codes_none)
+        } else {
+            getString(R.string.status_area_codes, areaCodes.joinToString(", "))
         }
         lines += getString(R.string.status_sms_note)
 
@@ -193,6 +280,12 @@ class MainActivity : AppCompatActivity() {
     private fun hasPermission(permission: String): Boolean {
         return ContextCompat.checkSelfPermission(this, permission) ==
             PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun hideKeyboard() {
+        val imm = getSystemService(InputMethodManager::class.java) ?: return
+        currentFocus?.let { imm.hideSoftInputFromWindow(it.windowToken, 0) }
+            ?: imm.hideSoftInputFromWindow(areaCodeInput.windowToken, 0)
     }
 
     private inner class BlockedAdapter(

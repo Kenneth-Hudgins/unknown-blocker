@@ -15,7 +15,7 @@ class ScreeningService : CallScreeningService() {
         }
 
         val number = callDetails.handle?.schemeSpecificPart.orEmpty()
-        if (ContactUtils.isNumberInContacts(this, number)) {
+        if (AllowRules.shouldAllow(this, number)) {
             respondToCall(callDetails, CallResponse.Builder().setDisallowCall(false).build())
         } else {
             BlockLog.add(this, number.ifBlank { "Private/Unknown" }, "call")

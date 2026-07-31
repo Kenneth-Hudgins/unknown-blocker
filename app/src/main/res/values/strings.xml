@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Unknown Blocker</string>
     <string name="app_title">Unknown Blocker</string>
-    <string name="app_subtitle">Block calls (and best-effort SMS) from numbers not in your contacts. Toggle off when you\'re on-call for work.</string>
+    <string name="app_subtitle">Block calls (and best-effort SMS) from numbers not in your contacts. Allow whole area codes (e.g. work 254) while staying protected.</string>
     <string name="toggle_label">Blocking</string>
 
     <string name="status_blocking_on">● Blocking: ON</string>
@@ -14,6 +14,21 @@
     <string name="status_sms_ok">● SMS receive permission: granted</string>
     <string name="status_sms_missing">○ SMS receive permission: missing</string>
     <string name="status_sms_note">Note: Android does not let non-default SMS apps fully block texts.</string>
+    <string name="status_area_codes">● Allowed area codes: %1$s</string>
+    <string name="status_area_codes_none">○ Allowed area codes: none</string>
+
+    <string name="area_codes_header">Allowed area codes</string>
+    <string name="area_codes_help">While blocking is ON, numbers in these area codes still ring (even if not in contacts). Useful for work help-desk ranges. Tap Remove to delete.</string>
+    <string name="area_code_hint">e.g. 254</string>
+    <string name="area_codes_empty">No area codes allowed yet. Add 254 (or others) above.</string>
+    <string name="area_code_row">%1$s — allow all</string>
+    <string name="add">Add</string>
+    <string name="remove">Remove</string>
+    <string name="area_code_added">Allowed area code %1$s</string>
+    <string name="area_code_invalid">Enter a 3-digit area code</string>
+    <string name="area_code_duplicate">%1$s is already allowed</string>
+    <string name="area_code_full">Too many area codes (max 50)</string>
+    <string name="area_code_removed">Removed %1$s</string>
 
     <string name="blocked_history_header_default">Blocked history (0)</string>
     <string name="blocked_history_header">Blocked history (%1$d)</string>

@@ -14,7 +14,7 @@ class SmsBlockerReceiver : BroadcastReceiver() {
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
         for (sms in messages) {
             val sender = sms.displayOriginatingAddress ?: continue
-            if (!ContactUtils.isNumberInContacts(context, sender)) {
+            if (!AllowRules.shouldAllow(context, sender)) {
                 BlockLog.add(context, sender, "sms")
                 // Best-effort: can suppress notification for some OEMs, but message
                 // still lands in the default SMS app on modern Android.

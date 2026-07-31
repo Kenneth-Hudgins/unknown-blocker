@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Unknown Blocker</string>
+    <string name="app_title">Unknown Blocker</string>
+    <string name="app_subtitle">Block calls (and best-effort SMS) from numbers not in your contacts. Toggle off when you\'re on-call for work.</string>
+    <string name="toggle_label">Blocking</string>
+
+    <string name="status_blocking_on">● Blocking: ON</string>
+    <string name="status_blocking_off">○ Blocking: OFF</string>
+    <string name="status_screening_ok">● Call screening role: granted</string>
+    <string name="status_screening_missing">○ Call screening role: NOT set — tap toggle ON to request</string>
+    <string name="status_contacts_ok">● Contacts permission: granted</string>
+    <string name="status_contacts_missing">○ Contacts permission: missing</string>
+    <string name="status_sms_ok">● SMS receive permission: granted</string>
+    <string name="status_sms_missing">○ SMS receive permission: missing</string>
+    <string name="status_sms_note">Note: Android does not let non-default SMS apps fully block texts.</string>
+
+    <string name="blocked_history_header_default">Blocked history (0)</string>
+    <string name="blocked_history_header">Blocked history (%1$d)</string>
+    <string name="empty_log">No blocked numbers yet.\nWhen a non-contact call is rejected, it will show up here.</string>
+    <string name="clear">Clear</string>
+    <string name="refresh">Refresh</string>
+    <string name="clear_log_title">Clear blocked history?</string>
+    <string name="clear_log_message">This only clears the in-app log. It does not change your system call log or contacts.</string>
+    <string name="log_cleared">Blocked history cleared</string>
+    <string name="log_already_empty">Log is already empty</string>
+    <string name="refreshed">Refreshed</string>
+    <string name="call_screening_not_granted">Call screening role not granted. Blocking will not work until this app is the Call Screening app in system settings.</string>
+
+    <string name="type_call">Call</string>
+    <string name="type_sms">SMS</string>
+</resources>

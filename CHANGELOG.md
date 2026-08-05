@@ -2,6 +2,42 @@
 
 All notable changes to **Unknown Blocker** are documented here.
 
+## [1.2.3] — 2026-08-04
+
+Real-device validated on Galaxy S22+ (debug APK).
+
+### Added
+
+- **Sticky voicemail alert mute** after a blocked call:
+  - Arms on block (no 15-minute timer)
+  - Dismisses voicemail-looking notifications while armed
+  - Disarms when a VM looks like a contact/allowed number (or a non-blocked caller rang more recently)
+- Optional **Notification access** path (`NotificationListenerService`) for VM alert suppress
+- **Notification listener log file** (absolute timestamps) with Open / Clear at bottom of UI
+- Status lines: Hide VM alerts on/off, VM mute ACTIVE vs idle, notification access
+
+### Changed
+
+- Main screen fully **scrollable**; ActionBar removed so title/subtitle are not covered
+- Broader Samsung dialer/phone VM detection + cancel/snooze retries
+- Screened-number memory for VM text matching kept **24 hours** (mute itself is sticky, not timed)
+- App version **1.2.3** (`versionCode` 6)
+
+### Notes from device testing
+
+- Call blocking (contacts + area codes) still works as in v1.1.0
+- VM notification mute improved vs timed window; delayed spam VMs after 15+ minutes stay muted while armed
+- Carrier voicemail **messages** may still exist — only the **notification** is suppressed
+- After install/update: reboot and re-toggle Notification access if needed
+
+### Known limitations
+
+- Cannot stop carrier from accepting a voicemail; only best-effort hide of the alert
+- Ambiguous VMs with no number may stay muted until an allowed signal
+- Behavior varies by Samsung One UI / carrier Visual Voicemail
+
+---
+
 ## [1.1.0] — 2026-07-30
 
 Real-device validated (debug APK update install on physical phone).

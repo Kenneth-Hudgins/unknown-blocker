@@ -4,12 +4,12 @@ Simple Android app that blocks **incoming calls from numbers not in your contact
 
 **Min Android:** 10 (API 29)  
 **Package:** `com.example.unknownblocker`  
-**Current version:** 1.1.0  
+**Current version:** 1.2.3  
 **Repo:** https://github.com/Kenneth-Hudgins/unknown-blocker
 
 ---
 
-## Features (v1.1.0)
+## Features (v1.2.3)
 
 ### Core (v1.0)
 
@@ -31,9 +31,20 @@ Simple Android app that blocks **incoming calls from numbers not in your contact
 - **Modern permission / role requests** (`ActivityResultLauncher` instead of deprecated APIs)
 - **Install / testing notes** from real device validation (see below)
 
+### Added in v1.2.x
+
+- **Sticky hide voicemail alerts after blocked calls** (optional; needs Notification access)
+  - Arms on a blocked call — **not** a short timer
+  - Stays muted until a VM looks like a contact/allowed caller (then alerts work again)
+  - Does **not** delete carrier voicemail — only the notification
+- Scrollable main UI; notification listener log file (Open in another app)
+- Status: VM mute ACTIVE vs idle
+
 ---
 
-## Real-device validation (v1.1.0)
+## Real-device validation
+
+### v1.1.0 (call blocking + area codes)
 
 Tested by installing the debug APK as an **update** over the previous working build:
 
@@ -45,7 +56,16 @@ Tested by installing the debug APK as an **update** over the previous working bu
 | Non-contact / non-allowlisted number | ✅ Went to voicemail after restart |
 | After adding caller’s area code | ✅ Next call was allowed through |
 
-**Practical tip:** After installing or updating, **reboot the phone** (or re-confirm Call Screening role), then verify with a real call before relying on it for on-call shifts.
+### v1.2.x (VM notification mute — Galaxy S22+)
+
+| Check | Result |
+|--------|--------|
+| Call blocking still correct | ✅ Same contacts / area-code rules |
+| Timed 15‑min mute missed delayed spam VM | ❌ Observed — motivated sticky mute |
+| Sticky mute after block | ✅ Delayed VM alert suppressed while armed |
+| Real/allowed path | ✅ Designed to re-enable on allowed-looking VM |
+
+**Practical tip:** After installing or updating, **reboot the phone** (or re-confirm Call Screening role + Notification access), then verify with a real call before relying on it for on-call shifts.
 
 ---
 
@@ -85,13 +105,17 @@ Contacts always ring either way. Allowed area codes apply to US/Canada-style (NA
 
 ```
 app/src/main/java/com/example/unknownblocker/
-  MainActivity.kt          # UI: toggle, status, area codes, blocked history
-  ScreeningService.kt      # Call screening / reject logic
-  SmsBlockerReceiver.kt    # Best-effort SMS handling + log
-  AllowRules.kt            # contacts OR allowed area code → allow
-  AreaCodeAllowlist.kt     # Persist + match NANP area codes (e.g. 254)
-  BlockLog.kt              # Persistent blocked-number history
-  ContactUtils.kt          # Shared contacts lookup
+  MainActivity.kt                      # UI: toggle, status, area codes, history, VM mute
+  ScreeningService.kt                  # Call screening / reject + arm VM mute
+  SmsBlockerReceiver.kt                # Best-effort SMS handling + log
+  AllowRules.kt                        # contacts OR allowed area code → allow
+  AreaCodeAllowlist.kt                 # Persist + match NANP area codes (e.g. 254)
+  BlockLog.kt                          # Persistent blocked-number history
+  ContactUtils.kt                      # Shared contacts lookup
+  BlockerSettings.kt                   # Prefs, sticky VM mute arm/disarm
+  VoicemailNotificationListener.kt     # Optional VM notification suppress
+  NotificationProbe.kt                 # Listener log file
+  RecentCallBlocks.kt                  # Recent screened numbers for VM matching
 ```
 
 ---

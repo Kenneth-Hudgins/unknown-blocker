@@ -29,6 +29,8 @@ import java.util.Date
 class MainActivity : AppCompatActivity() {
 
     private lateinit var toggle: Switch
+    private lateinit var suppressVmSwitch: Switch
+    private lateinit var notificationAccessButton: Button
     private lateinit var statusText: TextView
     private lateinit var logHeader: TextView
     private lateinit var emptyLogText: TextView
@@ -40,7 +42,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var areaCodesEmpty: TextView
     private lateinit var areaCodesContainer: LinearLayout
 
-    private val prefs by lazy { getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
+    private val prefs by lazy { getSharedPreferences(BlockerSettings.PREFS_NAME, Context.MODE_PRIVATE) }
     private val dateFormat: DateFormat by lazy {
         DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
     }
@@ -67,6 +69,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         toggle = findViewById(R.id.toggleSwitch)
+        suppressVmSwitch = findViewById(R.id.suppressVmSwitch)
+        notificationAccessButton = findViewById(R.id.notificationAccessButton)
         statusText = findViewById(R.id.statusText)
         logHeader = findViewById(R.id.logHeader)
         emptyLogText = findViewById(R.id.emptyLogText)
@@ -78,15 +82,29 @@ class MainActivity : AppCompatActivity() {
         areaCodesEmpty = findViewById(R.id.areaCodesEmpty)
         areaCodesContainer = findViewById(R.id.areaCodesContainer)
 
-        toggle.isChecked = prefs.getBoolean(KEY_ENABLED, false)
+        toggle.isChecked = prefs.getBoolean(BlockerSettings.KEY_ENABLED, false)
+        suppressVmSwitch.isChecked = BlockerSettings.isSuppressVmNotificationsEnabled(this)
 
         toggle.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean(KEY_ENABLED, isChecked).apply()
+            prefs.edit().putBoolean(BlockerSettings.KEY_ENABLED, isChecked).apply()
             if (isChecked) {
                 requestPermissionsIfNeeded()
                 requestCallScreeningRole()
             }
             refreshStatus()
+        }
+
+        suppressVmSwitch.setOnCheckedChangeListener { _, isChecked ->
+            BlockerSettings.setSuppressVmNotificationsEnabled(this, isChecked)
+            if (isChecked && !BlockerSettings.isNotificationListenerEnabled(this)) {
+                Toast.makeText(this, R.string.suppress_vm_needs_access, Toast.LENGTH_LONG).show()
+                openNotificationAccessSettings()
+            }
+            refreshStatus()
+        }
+
+        notificationAccessButton.setOnClickListener {
+            openNotificationAccessSettings()
         }
 
         addAreaCodeButton.setOnClickListener { addAreaCodeFromInput() }
@@ -131,9 +149,28 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Sync switch if user changed notification access in system settings
+        suppressVmSwitch.setOnCheckedChangeListener(null)
+        suppressVmSwitch.isChecked = BlockerSettings.isSuppressVmNotificationsEnabled(this)
+        suppressVmSwitch.setOnCheckedChangeListener { _, isChecked ->
+            BlockerSettings.setSuppressVmNotificationsEnabled(this, isChecked)
+            if (isChecked && !BlockerSettings.isNotificationListenerEnabled(this)) {
+                Toast.makeText(this, R.string.suppress_vm_needs_access, Toast.LENGTH_LONG).show()
+                openNotificationAccessSettings()
+            }
+            refreshStatus()
+        }
         refreshStatus()
         refreshLog()
         refreshAreaCodes()
+    }
+
+    private fun openNotificationAccessSettings() {
+        try {
+            startActivity(BlockerSettings.notificationListenerSettingsIntent())
+        } catch (_: Exception) {
+            Toast.makeText(this, R.string.open_notification_access, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun addAreaCodeFromInput() {
@@ -195,11 +232,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshStatus() {
-        val enabled = prefs.getBoolean(KEY_ENABLED, false)
+        val enabled = prefs.getBoolean(BlockerSettings.KEY_ENABLED, false)
         val roleHeld = isCallScreeningRoleHeld()
         val contactsOk = hasPermission(Manifest.permission.READ_CONTACTS)
         val smsOk = hasPermission(Manifest.permission.RECEIVE_SMS)
         val areaCodes = AreaCodeAllowlist.load(this)
+        val suppressVm = BlockerSettings.isSuppressVmNotificationsEnabled(this)
+        val notifAccess = BlockerSettings.isNotificationListenerEnabled(this)
 
         val lines = mutableListOf<String>()
         lines += if (enabled) getString(R.string.status_blocking_on) else getString(R.string.status_blocking_off)
@@ -222,6 +261,16 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.status_area_codes_none)
         } else {
             getString(R.string.status_area_codes, areaCodes.joinToString(", "))
+        }
+        lines += if (suppressVm) {
+            getString(R.string.status_suppress_vm_on)
+        } else {
+            getString(R.string.status_suppress_vm_off)
+        }
+        lines += if (notifAccess) {
+            getString(R.string.status_notif_access_ok)
+        } else {
+            getString(R.string.status_notif_access_missing)
         }
         lines += getString(R.string.status_sms_note)
 
@@ -306,10 +355,5 @@ class MainActivity : AppCompatActivity() {
             }
             return view
         }
-    }
-
-    companion object {
-        private const val PREFS_NAME = "blocker_prefs"
-        private const val KEY_ENABLED = "enabled"
     }
 }

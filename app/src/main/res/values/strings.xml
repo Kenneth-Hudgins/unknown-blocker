@@ -44,4 +44,14 @@
 
     <string name="type_call">Call</string>
     <string name="type_sms">SMS</string>
+
+    <string name="suppress_vm_label">Hide voicemail alerts after blocked calls</string>
+    <string name="suppress_vm_help">Does not delete voicemails — only dismisses the notification when we recently blocked a call. Requires Notification access. Carrier/OEM wording varies; reboot after granting access if it seems inactive.</string>
+    <string name="open_notification_access">Notification access settings</string>
+    <string name="notification_listener_label">Unknown Blocker voicemail alerts</string>
+    <string name="status_suppress_vm_on">● Hide VM alerts: ON</string>
+    <string name="status_suppress_vm_off">○ Hide VM alerts: OFF</string>
+    <string name="status_notif_access_ok">● Notification access: granted</string>
+    <string name="status_notif_access_missing">○ Notification access: NOT granted — open settings below</string>
+    <string name="suppress_vm_needs_access">Turned on — grant Notification access so it can work</string>
 </resources>

@@ -18,7 +18,10 @@ class ScreeningService : CallScreeningService() {
         if (AllowRules.shouldAllow(this, number)) {
             respondToCall(callDetails, CallResponse.Builder().setDisallowCall(false).build())
         } else {
-            BlockLog.add(this, number.ifBlank { "Private/Unknown" }, "call")
+            val blockedLabel = number.ifBlank { "Private/Unknown" }
+            BlockLog.add(this, blockedLabel, "call")
+            // For VM notification suppression window (feature branch).
+            RecentCallBlocks.mark(this, blockedLabel)
             val response = CallResponse.Builder()
                 .setDisallowCall(true)
                 .setRejectCall(true)

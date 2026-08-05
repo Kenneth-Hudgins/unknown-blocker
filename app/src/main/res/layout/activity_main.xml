@@ -30,6 +30,29 @@
         android:text="@string/toggle_label"
         android:textSize="18sp" />
 
+    <Switch
+        android:id="@+id/suppressVmSwitch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/suppress_vm_label"
+        android:textSize="15sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/suppress_vm_help"
+        android:textSize="12sp" />
+
+    <Button
+        android:id="@+id/notificationAccessButton"
+        style="?android:attr/buttonBarButtonStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/open_notification_access" />
+
     <TextView
         android:id="@+id/statusText"
         android:layout_width="match_parent"

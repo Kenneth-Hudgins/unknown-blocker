@@ -31,6 +31,17 @@
             </intent-filter>
         </service>
 
+        <!-- Dismiss voicemail-looking notifications after blocked calls (optional) -->
+        <service
+            android:name=".VoicemailNotificationListener"
+            android:label="@string/notification_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- SMS Receiver -->
         <receiver
             android:name=".SmsBlockerReceiver"

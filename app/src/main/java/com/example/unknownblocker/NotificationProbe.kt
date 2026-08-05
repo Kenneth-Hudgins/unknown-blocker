@@ -1,25 +1,25 @@
 package com.example.unknownblocker
 
 import android.content.Context
-import org.json.JSONArray
-import org.json.JSONObject
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
- * Ring buffer of recent notifications seen by [VoicemailNotificationListener]
- * so the UI can show what Samsung actually posted (debug / tuning).
+ * Append-only notification listener log written to app private storage.
+ * Opened externally via FileProvider (text viewer / browser / share sheet).
  */
 object NotificationProbe {
-    private const val PREFS = "blocker_prefs"
-    private const val KEY = "notif_probe_log"
-    private const val MAX = 12
+    const val LOG_FILE_NAME = "notification_listener_log.txt"
+    private const val MAX_LINES = 400
+    private val lock = ReentrantLock()
 
-    data class Row(
-        val timestampMs: Long,
-        val pkg: String,
-        val channel: String,
-        val text: String,
-        val action: String // SEEN / DISMISS / KEEP
-    )
+    private val stampFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+
+    fun logFile(context: Context): File = File(context.filesDir, LOG_FILE_NAME)
 
     fun record(
         context: Context,
@@ -28,76 +28,71 @@ object NotificationProbe {
         text: String,
         action: String
     ) {
-        val rows = load(context).toMutableList()
-        rows.add(
-            0,
-            Row(
-                timestampMs = System.currentTimeMillis(),
-                pkg = pkg.take(80),
-                channel = channel.take(40),
-                text = text.replace('\n', ' ').take(160),
-                action = action
-            )
-        )
-        while (rows.size > MAX) rows.removeAt(rows.lastIndex)
-        val arr = JSONArray()
-        for (r in rows) {
-            arr.put(
-                JSONObject()
-                    .put("ts", r.timestampMs)
-                    .put("p", r.pkg)
-                    .put("c", r.channel)
-                    .put("t", r.text)
-                    .put("a", r.action)
-            )
-        }
-        // commit so UI process sees it immediately
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY, arr.toString())
-            .commit()
-    }
-
-    fun load(context: Context): List<Row> {
-        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY, null) ?: return emptyList()
-        return try {
-            val arr = JSONArray(raw)
-            val out = ArrayList<Row>(arr.length())
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                out.add(
-                    Row(
-                        timestampMs = o.optLong("ts"),
-                        pkg = o.optString("p"),
-                        channel = o.optString("c"),
-                        text = o.optString("t"),
-                        action = o.optString("a")
-                    )
-                )
-            }
-            out
-        } catch (_: Exception) {
-            emptyList()
-        }
+        val stamp = stampFormat.format(Date())
+        val pkgSafe = pkg.take(120).replace('\n', ' ')
+        val chSafe = channel.take(80).replace('\n', ' ').ifBlank { "(none)" }
+        val textSafe = text.replace('\n', ' ').take(240).ifBlank { "(no text)" }
+        val line = "$stamp | $action | pkg=$pkgSafe | ch=$chSafe | $textSafe"
+        appendLine(context, line)
     }
 
     fun clear(context: Context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .remove(KEY)
-            .commit()
+        lock.withLock {
+            val f = logFile(context)
+            if (f.exists()) {
+                f.writeText("")
+            }
+        }
     }
 
-    fun formatForUi(context: Context): String {
-        val rows = load(context)
-        if (rows.isEmpty()) {
-            return "No notifications seen yet by the listener.\n" +
-                "If this stays empty after a VM arrives, Notification access is not actually bound."
+    fun existsAndNonEmpty(context: Context): Boolean {
+        val f = logFile(context)
+        return f.exists() && f.length() > 0L
+    }
+
+    fun lineCount(context: Context): Int {
+        val f = logFile(context)
+        if (!f.exists() || f.length() == 0L) return 0
+        return try {
+            f.useLines { it.count() }
+        } catch (_: Exception) {
+            0
         }
-        return rows.joinToString("\n\n") { r ->
-            val ageSec = ((System.currentTimeMillis() - r.timestampMs) / 1000).coerceAtLeast(0)
-            "[$ageSec s ago] ${r.action}\npkg=${r.pkg}\nch=${r.channel.ifBlank { "(none)" }}\n${r.text.ifBlank { "(no text)" }}"
+    }
+
+    /** Short status for the main screen (not the full log body). */
+    fun statusSummary(context: Context): String {
+        val n = lineCount(context)
+        return if (n == 0) {
+            "Log file empty — no listener events yet (or log was cleared)."
+        } else {
+            "Log file has $n line(s). Tap Open to view in another app."
+        }
+    }
+
+    private fun appendLine(context: Context, line: String) {
+        lock.withLock {
+            try {
+                val f = logFile(context)
+                f.appendText(line + "\n")
+                trimIfNeeded(f)
+            } catch (_: Exception) {
+                // Best-effort diagnostics; never crash the listener.
+            }
+        }
+    }
+
+    private fun trimIfNeeded(file: File) {
+        val lines = try {
+            file.readLines()
+        } catch (_: Exception) {
+            return
+        }
+        if (lines.size <= MAX_LINES) return
+        val keep = lines.takeLast(MAX_LINES)
+        try {
+            file.writeText(keep.joinToString("\n") + "\n")
+        } catch (_: Exception) {
         }
     }
 }

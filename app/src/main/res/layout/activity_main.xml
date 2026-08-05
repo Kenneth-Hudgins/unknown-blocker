@@ -5,28 +5,36 @@
     android:layout_height="match_parent"
     android:clipToPadding="false"
     android:fillViewport="true"
+    android:fitsSystemWindows="true"
     android:scrollbars="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp"
-        android:paddingBottom="32dp">
+        android:paddingStart="24dp"
+        android:paddingTop="28dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="40dp">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
             android:text="@string/app_title"
             android:textSize="28sp"
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/appSubtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="12dp"
             android:gravity="center"
+            android:lineSpacingExtra="2dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
             android:text="@string/app_subtitle"
             android:textSize="15sp" />
 
@@ -61,41 +69,6 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:text="@string/open_notification_access" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/probe_header"
-            android:textSize="16sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/probe_help"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/probeText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="#14000000"
-            android:fontFamily="monospace"
-            android:lineSpacingExtra="2dp"
-            android:padding="12dp"
-            android:textIsSelectable="true"
-            android:textSize="11sp" />
-
-        <Button
-            android:id="@+id/clearProbeButton"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/clear_probe" />
 
         <TextView
             android:id="@+id/statusText"
@@ -206,7 +179,6 @@
             android:text="@string/empty_log"
             android:textSize="14sp" />
 
-        <!-- Grows with content; parent ScrollView provides the scrollbar -->
         <LinearLayout
             android:id="@+id/blockedListContainer"
             android:layout_width="match_parent"
@@ -214,6 +186,51 @@
             android:layout_marginTop="8dp"
             android:orientation="vertical"
             android:visibility="gone" />
+
+        <!-- Notification listener log — bottom of screen; body lives in a file -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:text="@string/probe_header"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/probe_help"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/probeStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/openProbeButton"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/open_probe_log" />
+
+            <Button
+                android:id="@+id/clearProbeButton"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/clear_probe" />
+        </LinearLayout>
 
     </LinearLayout>
 </ScrollView>

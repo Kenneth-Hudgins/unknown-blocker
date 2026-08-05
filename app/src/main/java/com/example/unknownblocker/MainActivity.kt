@@ -3,6 +3,7 @@ package com.example.unknownblocker
 import android.Manifest
 import android.app.role.RoleManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -20,6 +21,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import java.text.DateFormat
 import java.util.Date
 
@@ -28,7 +30,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toggle: Switch
     private lateinit var suppressVmSwitch: Switch
     private lateinit var notificationAccessButton: Button
-    private lateinit var probeText: TextView
+    private lateinit var probeStatusText: TextView
+    private lateinit var openProbeButton: Button
     private lateinit var clearProbeButton: Button
     private lateinit var statusText: TextView
     private lateinit var logHeader: TextView
@@ -70,7 +73,8 @@ class MainActivity : AppCompatActivity() {
         toggle = findViewById(R.id.toggleSwitch)
         suppressVmSwitch = findViewById(R.id.suppressVmSwitch)
         notificationAccessButton = findViewById(R.id.notificationAccessButton)
-        probeText = findViewById(R.id.probeText)
+        probeStatusText = findViewById(R.id.probeStatusText)
+        openProbeButton = findViewById(R.id.openProbeButton)
         clearProbeButton = findViewById(R.id.clearProbeButton)
         statusText = findViewById(R.id.statusText)
         logHeader = findViewById(R.id.logHeader)
@@ -108,9 +112,11 @@ class MainActivity : AppCompatActivity() {
             openNotificationAccessSettings()
         }
 
+        openProbeButton.setOnClickListener { openProbeLogFile() }
+
         clearProbeButton.setOnClickListener {
             NotificationProbe.clear(this)
-            refreshProbe()
+            refreshProbeStatus()
             Toast.makeText(this, R.string.probe_cleared, Toast.LENGTH_SHORT).show()
         }
 
@@ -145,7 +151,7 @@ class MainActivity : AppCompatActivity() {
             refreshStatus()
             refreshLog()
             refreshAreaCodes()
-            refreshProbe()
+            refreshProbeStatus()
             Toast.makeText(this, R.string.refreshed, Toast.LENGTH_SHORT).show()
         }
 
@@ -171,7 +177,7 @@ class MainActivity : AppCompatActivity() {
         refreshStatus()
         refreshLog()
         refreshAreaCodes()
-        refreshProbe()
+        refreshProbeStatus()
     }
 
     private fun openNotificationAccessSettings() {
@@ -179,6 +185,45 @@ class MainActivity : AppCompatActivity() {
             startActivity(BlockerSettings.notificationListenerSettingsIntent())
         } catch (_: Exception) {
             Toast.makeText(this, R.string.open_notification_access, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openProbeLogFile() {
+        if (!NotificationProbe.existsAndNonEmpty(this)) {
+            Toast.makeText(this, R.string.probe_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val file = NotificationProbe.logFile(this)
+            val uri = FileProvider.getUriForFile(
+                this,
+                "$packageName.fileprovider",
+                file
+            )
+            val view = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "text/plain")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(view, getString(R.string.open_probe_log)))
+        } catch (_: Exception) {
+            // Fallback: share sheet (works when no text viewer is registered)
+            try {
+                val file = NotificationProbe.logFile(this)
+                val uri = FileProvider.getUriForFile(
+                    this,
+                    "$packageName.fileprovider",
+                    file
+                )
+                val share = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_SUBJECT, NotificationProbe.LOG_FILE_NAME)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivity(Intent.createChooser(share, getString(R.string.open_probe_log)))
+            } catch (_: Exception) {
+                Toast.makeText(this, R.string.probe_open_failed, Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -286,8 +331,8 @@ class MainActivity : AppCompatActivity() {
         statusText.text = lines.joinToString("\n")
     }
 
-    private fun refreshProbe() {
-        probeText.text = NotificationProbe.formatForUi(this)
+    private fun refreshProbeStatus() {
+        probeStatusText.text = NotificationProbe.statusSummary(this)
     }
 
     private fun refreshLog() {

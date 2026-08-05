@@ -16,12 +16,15 @@ class ScreeningService : CallScreeningService() {
 
         val number = callDetails.handle?.schemeSpecificPart.orEmpty()
         if (AllowRules.shouldAllow(this, number)) {
+            // Remember allows so a later real VM is not treated as spam-VM noise.
+            if (number.isNotBlank()) {
+                RecentScreenedCalls.markAllowed(this, number)
+            }
             respondToCall(callDetails, CallResponse.Builder().setDisallowCall(false).build())
         } else {
             val blockedLabel = number.ifBlank { "Private/Unknown" }
             BlockLog.add(this, blockedLabel, "call")
-            // For VM notification suppression window (feature branch).
-            RecentCallBlocks.mark(this, blockedLabel)
+            RecentScreenedCalls.markBlocked(this, blockedLabel)
             val response = CallResponse.Builder()
                 .setDisallowCall(true)
                 .setRejectCall(true)

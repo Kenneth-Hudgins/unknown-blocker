@@ -7,14 +7,21 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 
 /**
- * Best-effort dismissal of **voicemail-looking** notifications after a call we blocked.
+ * Best-effort dismissal of **voicemail-looking** notifications tied to calls we blocked.
  *
- * Limitations (honest):
- * - Does NOT delete carrier voicemail messages — only clears the heads-up/status alert.
- * - OEM/carrier notification text varies; we use heuristics + a recent-block time window.
- * - User must grant Notification access in system settings.
- * - Real contact voicemails that arrive in the same window could theoretically be dismissed
- *   if they look like VM alerts; we try to prefer number match + recent blocked-call window.
+ * Decision order (when blocking + suppress toggle + notification access):
+ * 1. Not a VM-looking notification → leave it
+ * 2. Notification mentions an **allowed** number (recent allow, contacts, area code) → **keep**
+ * 3. Notification mentions a **recently blocked** number → **dismiss**
+ * 4. No usable number in the text:
+ *    - If a more recent (or equally recent) **allowed** call exists in-window → **keep**
+ *    - Else if a **blocked** call exists in-window → **dismiss**
+ *    - Else → **keep**
+ *
+ * Limitations:
+ * - Does NOT delete carrier voicemail — only the notification.
+ * - OEM/carrier text varies; number often missing → step 4 is best-effort.
+ * - Private/unknown blocked numbers can't match text by digits.
  */
 class VoicemailNotificationListener : NotificationListenerService() {
 
@@ -36,27 +43,64 @@ class VoicemailNotificationListener : NotificationListenerService() {
         try {
             if (!shouldCancel(sbn)) return
             cancelNotification(sbn.key)
-            Log.i(TAG, "Dismissed possible VM notification from ${sbn.packageName}")
+            Log.i(TAG, "Dismissed possible spam-VM notification from ${sbn.packageName}")
         } catch (e: Exception) {
             Log.w(TAG, "cancel failed", e)
         }
     }
 
     private fun shouldCancel(sbn: StatusBarNotification): Boolean {
-        // Never touch our own notifications
         if (sbn.packageName == packageName) return false
-
         if (!BlockerSettings.isBlockingEnabled(this)) return false
         if (!BlockerSettings.isSuppressVmNotificationsEnabled(this)) return false
-
         if (!looksLikeVoicemailNotification(sbn)) return false
 
         val text = notificationText(sbn)
-        val mentionsBlocked = RecentCallBlocks.textMentionsRecentNumber(this, text)
-        val recentBlock = RecentCallBlocks.hasRecentWithinWindow(this)
+        val now = System.currentTimeMillis()
 
-        // Prefer number match; otherwise only within the post-block window.
-        return mentionsBlocked || recentBlock
+        // 2) Explicit allow signal in the notification → never suppress
+        val mentionsAllowedRecent = RecentScreenedCalls.textMentionsRecent(
+            this, text, RecentScreenedCalls.Kind.ALLOWED, now
+        )
+        if (mentionsAllowedRecent) {
+            Log.d(TAG, "keep VM: mentions recent allowed number")
+            return false
+        }
+        if (RecentScreenedCalls.textMentionsAllowlistedNumber(this, text)) {
+            Log.d(TAG, "keep VM: mentions contact/area-code allowlisted number")
+            return false
+        }
+
+        // 3) Explicit blocked number in the notification → suppress
+        val mentionsBlocked = RecentScreenedCalls.textMentionsRecent(
+            this, text, RecentScreenedCalls.Kind.BLOCKED, now
+        )
+        if (mentionsBlocked) {
+            Log.d(TAG, "dismiss VM: mentions recent blocked number")
+            return true
+        }
+
+        // 4) Ambiguous (no number we can trust in the text)
+        val lastAllowed = RecentScreenedCalls.mostRecentAllowedAt(this)
+        val lastBlocked = RecentScreenedCalls.mostRecentBlockedAt(this)
+        val allowedInWindow =
+            lastAllowed != null && now - lastAllowed in 0..RecentScreenedCalls.WINDOW_MS
+        val blockedInWindow =
+            lastBlocked != null && now - lastBlocked in 0..RecentScreenedCalls.WINDOW_MS
+
+        if (!blockedInWindow) {
+            return false
+        }
+
+        // If the most recent screened call in-window was ALLOWED (contact/area code),
+        // keep the VM alert — likely their voicemail, not the spam one.
+        if (allowedInWindow && lastAllowed!! >= lastBlocked!!) {
+            Log.d(TAG, "keep VM: most recent screened call was allowed (ambiguous notif)")
+            return false
+        }
+
+        Log.d(TAG, "dismiss VM: most recent screened signal is a block (ambiguous notif)")
+        return true
     }
 
     private fun looksLikeVoicemailNotification(sbn: StatusBarNotification): Boolean {
@@ -64,22 +108,14 @@ class VoicemailNotificationListener : NotificationListenerService() {
         val text = notificationText(sbn).lowercase()
         val channel = notificationChannelId(sbn)?.lowercase().orEmpty()
 
-        // Package heuristics (dialer / phone / carrier VM apps)
         val pkgHit = PKG_HINTS.any { pkg.contains(it) }
-
-        // Text / channel heuristics
         val textHit = VM_TEXT_HINTS.any { text.contains(it) } ||
             VM_TEXT_HINTS.any { channel.contains(it) }
-
-        // Category
         val category = sbn.notification?.category
         val categoryHit = category == Notification.CATEGORY_MESSAGE && textHit
 
-        // Many OEMs use phone package with "voicemail" in title only
         if (textHit) return true
         if (pkgHit && (textHit || channel.contains("voice") || text.contains("message"))) {
-            // Phone package alone is too broad (would kill SMS/call notifs).
-            // Require some voice/mail signal in text or channel when package matches.
             return textHit || channel.contains("voice") || channel.contains("vm") ||
                 text.contains("voice") || text.contains("mail")
         }
@@ -97,7 +133,6 @@ class VoicemailNotificationListener : NotificationListenerService() {
             extras.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString(),
             n.tickerText?.toString()
         )
-        // EXTRA_TEXT_LINES
         val lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
         val lineText = lines?.joinToString(" ") { it?.toString().orEmpty() }.orEmpty()
         return (parts.joinToString(" ") + " " + lineText).trim()

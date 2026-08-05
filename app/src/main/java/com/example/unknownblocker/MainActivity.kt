@@ -8,14 +8,11 @@ import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ListView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -34,7 +31,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var logHeader: TextView
     private lateinit var emptyLogText: TextView
-    private lateinit var blockedList: ListView
+    private lateinit var blockedListContainer: LinearLayout
     private lateinit var clearLogButton: Button
     private lateinit var refreshButton: Button
     private lateinit var areaCodeInput: EditText
@@ -74,7 +71,7 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         logHeader = findViewById(R.id.logHeader)
         emptyLogText = findViewById(R.id.emptyLogText)
-        blockedList = findViewById(R.id.blockedList)
+        blockedListContainer = findViewById(R.id.blockedListContainer)
         clearLogButton = findViewById(R.id.clearLogButton)
         refreshButton = findViewById(R.id.refreshButton)
         areaCodeInput = findViewById(R.id.areaCodeInput)
@@ -280,15 +277,26 @@ class MainActivity : AppCompatActivity() {
     private fun refreshLog() {
         val entries = BlockLog.load(this)
         logHeader.text = getString(R.string.blocked_history_header, entries.size)
+        blockedListContainer.removeAllViews()
 
         if (entries.isEmpty()) {
             emptyLogText.visibility = View.VISIBLE
-            blockedList.visibility = View.GONE
-            blockedList.adapter = null
-        } else {
-            emptyLogText.visibility = View.GONE
-            blockedList.visibility = View.VISIBLE
-            blockedList.adapter = BlockedAdapter(entries)
+            blockedListContainer.visibility = View.GONE
+            return
+        }
+
+        emptyLogText.visibility = View.GONE
+        blockedListContainer.visibility = View.VISIBLE
+        val inflater = LayoutInflater.from(this)
+        for (entry in entries) {
+            val row = inflater.inflate(R.layout.item_blocked_number, blockedListContainer, false)
+            row.findViewById<TextView>(R.id.itemNumber).text = entry.number
+            row.findViewById<TextView>(R.id.itemMeta).text = buildString {
+                append(if (entry.type == "sms") getString(R.string.type_sms) else getString(R.string.type_call))
+                append(" · ")
+                append(dateFormat.format(Date(entry.timestampMs)))
+            }
+            blockedListContainer.addView(row)
         }
     }
 
@@ -335,25 +343,5 @@ class MainActivity : AppCompatActivity() {
         val imm = getSystemService(InputMethodManager::class.java) ?: return
         currentFocus?.let { imm.hideSoftInputFromWindow(it.windowToken, 0) }
             ?: imm.hideSoftInputFromWindow(areaCodeInput.windowToken, 0)
-    }
-
-    private inner class BlockedAdapter(
-        private val items: List<BlockLog.Entry>
-    ) : BaseAdapter() {
-        override fun getCount(): Int = items.size
-        override fun getItem(position: Int): BlockLog.Entry = items[position]
-        override fun getItemId(position: Int): Long = items[position].timestampMs
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-            val view = convertView ?: LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_blocked_number, parent, false)
-            val entry = items[position]
-            view.findViewById<TextView>(R.id.itemNumber).text = entry.number
-            view.findViewById<TextView>(R.id.itemMeta).text = buildString {
-                append(if (entry.type == "sms") getString(R.string.type_sms) else getString(R.string.type_call))
-                append(" · ")
-                append(dateFormat.format(Date(entry.timestampMs)))
-            }
-            return view
-        }
     }
 }

@@ -16,7 +16,7 @@ class ScreeningService : CallScreeningService() {
 
         val number = callDetails.handle?.schemeSpecificPart.orEmpty()
         if (AllowRules.shouldAllow(this, number)) {
-            // Remember allows so a later real VM is not treated as spam-VM noise.
+            // Remember allows so a later real VM can disarm sticky mute.
             if (number.isNotBlank()) {
                 RecentScreenedCalls.markAllowed(this, number)
             }
@@ -25,6 +25,8 @@ class ScreeningService : CallScreeningService() {
             val blockedLabel = number.ifBlank { "Private/Unknown" }
             BlockLog.add(this, blockedLabel, "call")
             RecentScreenedCalls.markBlocked(this, blockedLabel)
+            // Sticky: mute VM alerts until an allowed-looking VM arrives.
+            BlockerSettings.armVmSuppress(this)
             val response = CallResponse.Builder()
                 .setDisallowCall(true)
                 .setRejectCall(true)

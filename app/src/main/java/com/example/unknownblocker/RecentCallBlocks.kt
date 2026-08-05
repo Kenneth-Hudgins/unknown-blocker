@@ -14,8 +14,11 @@ object RecentScreenedCalls {
     private const val KEY_RECENT = "recent_screened_calls"
     private const val MAX_ENTRIES = 40
 
-    /** How long we correlate VM notifications with recent screening decisions. */
-    const val WINDOW_MS: Long = 15 * 60 * 1000L // 15 minutes
+    /**
+     * How long we remember screened numbers for matching against VM notification text.
+     * Sticky VM mute itself is not timed — this is only for number correlation.
+     */
+    const val WINDOW_MS: Long = 24 * 60 * 60 * 1000L // 24 hours
 
     enum class Kind { BLOCKED, ALLOWED }
 

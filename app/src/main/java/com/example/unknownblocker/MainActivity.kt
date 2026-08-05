@@ -321,6 +321,13 @@ class MainActivity : AppCompatActivity() {
         } else {
             getString(R.string.status_suppress_vm_off)
         }
+        if (suppressVm) {
+            lines += if (BlockerSettings.isVmSuppressArmed(this)) {
+                getString(R.string.status_vm_mute_armed)
+            } else {
+                getString(R.string.status_vm_mute_idle)
+            }
+        }
         lines += if (notifAccess) {
             getString(R.string.status_notif_access_ok)
         } else {

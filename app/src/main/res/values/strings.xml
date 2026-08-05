@@ -46,11 +46,13 @@
     <string name="type_sms">SMS</string>
 
     <string name="suppress_vm_label">Hide voicemail alerts after blocked calls</string>
-    <string name="suppress_vm_help">Does not delete voicemails — only dismisses alerts likely from a call we blocked. Keeps alerts when the notification shows a contact/allowed number, or when a non-blocked call was screened more recently. Requires Notification access.</string>
+    <string name="suppress_vm_help">After a blocked call, mutes voicemail alerts until a VM looks like it came from a contact/allowed number (or a non-blocked caller rang more recently). Not a 15‑minute timer. Does not delete voicemails. Requires Notification access.</string>
     <string name="open_notification_access">Notification access settings</string>
     <string name="notification_listener_label">Unknown Blocker voicemail alerts</string>
     <string name="status_suppress_vm_on">● Hide VM alerts: ON</string>
     <string name="status_suppress_vm_off">○ Hide VM alerts: OFF</string>
+    <string name="status_vm_mute_armed">● VM mute: ACTIVE (waiting for allowed-looking VM)</string>
+    <string name="status_vm_mute_idle">○ VM mute: idle (arms on next blocked call)</string>
     <string name="status_notif_access_ok">● Notification access: granted</string>
     <string name="status_notif_access_missing">○ Notification access: NOT granted — open settings below</string>
     <string name="suppress_vm_needs_access">Turned on — grant Notification access so it can work</string>

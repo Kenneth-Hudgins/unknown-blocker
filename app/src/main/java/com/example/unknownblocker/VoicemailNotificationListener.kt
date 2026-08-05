@@ -2,33 +2,29 @@ package com.example.unknownblocker
 
 import android.app.Notification
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 
 /**
- * Best-effort dismissal of **voicemail-looking** notifications tied to calls we blocked.
+ * Best-effort dismissal of voicemail-looking notifications after blocked calls.
  *
- * Decision order (when blocking + suppress toggle + notification access):
- * 1. Not a VM-looking notification → leave it
- * 2. Notification mentions an **allowed** number (recent allow, contacts, area code) → **keep**
- * 3. Notification mentions a **recently blocked** number → **dismiss**
- * 4. No usable number in the text:
- *    - If a more recent (or equally recent) **allowed** call exists in-window → **keep**
- *    - Else if a **blocked** call exists in-window → **dismiss**
- *    - Else → **keep**
- *
- * Limitations:
- * - Does NOT delete carrier voicemail — only the notification.
- * - OEM/carrier text varies; number often missing → step 4 is best-effort.
- * - Private/unknown blocked numbers can't match text by digits.
+ * Samsung/One UI often uses packages/text that don't say "voicemail" literally.
+ * When suppress is ON and we recently blocked a call, we aggressively target
+ * phone/dialer/telecom packages and message-like alerts, with cancel retries.
  */
 class VoicemailNotificationListener : NotificationListenerService() {
 
+    private val handler = Handler(Looper.getMainLooper())
+
     override fun onListenerConnected() {
         super.onListenerConnected()
+        Log.i(TAG, "listener connected")
+        NotificationProbe.record(this, packageName, "", "listener connected", "INFO")
         try {
-            activeNotifications?.forEach { maybeCancel(it) }
+            activeNotifications?.forEach { evaluate(it, fromPosted = false) }
         } catch (e: SecurityException) {
             Log.w(TAG, "activeNotifications failed", e)
         }
@@ -36,51 +32,87 @@ class VoicemailNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
-        maybeCancel(sbn)
-    }
-
-    private fun maybeCancel(sbn: StatusBarNotification) {
-        try {
-            if (!shouldCancel(sbn)) return
-            cancelNotification(sbn.key)
-            Log.i(TAG, "Dismissed possible spam-VM notification from ${sbn.packageName}")
-        } catch (e: Exception) {
-            Log.w(TAG, "cancel failed", e)
+        evaluate(sbn, fromPosted = true)
+        // Samsung sometimes mutates/republishes VM alerts; re-check shortly after.
+        if (BlockerSettings.isSuppressVmNotificationsEnabled(this) &&
+            RecentScreenedCalls.hasRecentBlocked(this)
+        ) {
+            handler.postDelayed({
+                try {
+                    evaluate(sbn, fromPosted = false)
+                } catch (_: Exception) {
+                }
+            }, 750)
+            handler.postDelayed({
+                try {
+                    evaluate(sbn, fromPosted = false)
+                } catch (_: Exception) {
+                }
+            }, 2500)
         }
     }
 
-    private fun shouldCancel(sbn: StatusBarNotification): Boolean {
-        if (sbn.packageName == packageName) return false
+    private fun evaluate(sbn: StatusBarNotification, fromPosted: Boolean) {
+        try {
+            if (sbn.packageName == packageName) return
+
+            val text = notificationText(sbn)
+            val channel = notificationChannelId(sbn).orEmpty()
+            val pkg = sbn.packageName.orEmpty()
+
+            // Always log when suppress feature is enabled so we can debug OEMs.
+            if (BlockerSettings.isSuppressVmNotificationsEnabled(this)) {
+                val decision = decide(sbn, text, channel, pkg)
+                NotificationProbe.record(
+                    this,
+                    pkg,
+                    channel,
+                    text,
+                    if (decision) "DISMISS" else "KEEP"
+                )
+                if (decision) {
+                    dismissHard(sbn)
+                    Log.i(TAG, "dismissed $pkg | $text")
+                } else if (fromPosted) {
+                    Log.d(TAG, "keep $pkg | $text")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "evaluate failed", e)
+        }
+    }
+
+    private fun decide(
+        sbn: StatusBarNotification,
+        text: String,
+        channel: String,
+        pkg: String
+    ): Boolean {
         if (!BlockerSettings.isBlockingEnabled(this)) return false
         if (!BlockerSettings.isSuppressVmNotificationsEnabled(this)) return false
-        if (!looksLikeVoicemailNotification(sbn)) return false
+        if (!looksLikeVoicemailOrPhoneMessage(sbn, text, channel, pkg)) return false
 
-        val text = notificationText(sbn)
         val now = System.currentTimeMillis()
 
-        // 2) Explicit allow signal in the notification → never suppress
-        val mentionsAllowedRecent = RecentScreenedCalls.textMentionsRecent(
-            this, text, RecentScreenedCalls.Kind.ALLOWED, now
-        )
-        if (mentionsAllowedRecent) {
-            Log.d(TAG, "keep VM: mentions recent allowed number")
+        // Keep if clearly an allowed/contact number
+        if (RecentScreenedCalls.textMentionsRecent(
+                this, text, RecentScreenedCalls.Kind.ALLOWED, now
+            )
+        ) {
             return false
         }
         if (RecentScreenedCalls.textMentionsAllowlistedNumber(this, text)) {
-            Log.d(TAG, "keep VM: mentions contact/area-code allowlisted number")
             return false
         }
 
-        // 3) Explicit blocked number in the notification → suppress
-        val mentionsBlocked = RecentScreenedCalls.textMentionsRecent(
-            this, text, RecentScreenedCalls.Kind.BLOCKED, now
-        )
-        if (mentionsBlocked) {
-            Log.d(TAG, "dismiss VM: mentions recent blocked number")
+        // Dismiss if mentions blocked number
+        if (RecentScreenedCalls.textMentionsRecent(
+                this, text, RecentScreenedCalls.Kind.BLOCKED, now
+            )
+        ) {
             return true
         }
 
-        // 4) Ambiguous (no number we can trust in the text)
         val lastAllowed = RecentScreenedCalls.mostRecentAllowedAt(this)
         val lastBlocked = RecentScreenedCalls.mostRecentBlockedAt(this)
         val allowedInWindow =
@@ -88,54 +120,145 @@ class VoicemailNotificationListener : NotificationListenerService() {
         val blockedInWindow =
             lastBlocked != null && now - lastBlocked in 0..RecentScreenedCalls.WINDOW_MS
 
-        if (!blockedInWindow) {
+        if (!blockedInWindow) return false
+
+        // Prefer keep only when an allowed call is the newest screened event
+        if (allowedInWindow && lastAllowed >= lastBlocked) {
             return false
         }
 
-        // If the most recent screened call in-window was ALLOWED (contact/area code),
-        // keep the VM alert — likely their voicemail, not the spam one.
-        if (allowedInWindow && lastAllowed!! >= lastBlocked!!) {
-            Log.d(TAG, "keep VM: most recent screened call was allowed (ambiguous notif)")
-            return false
-        }
-
-        Log.d(TAG, "dismiss VM: most recent screened signal is a block (ambiguous notif)")
         return true
     }
 
-    private fun looksLikeVoicemailNotification(sbn: StatusBarNotification): Boolean {
-        val pkg = sbn.packageName.orEmpty().lowercase()
-        val text = notificationText(sbn).lowercase()
-        val channel = notificationChannelId(sbn)?.lowercase().orEmpty()
+    private fun dismissHard(sbn: StatusBarNotification) {
+        try {
+            cancelNotification(sbn.key)
+        } catch (e: Exception) {
+            Log.w(TAG, "cancelNotification key failed", e)
+        }
+        try {
+            // Older overload — some OEMs behave better with it
+            @Suppress("DEPRECATION")
+            cancelNotification(sbn.packageName, sbn.tag, sbn.id)
+        } catch (_: Exception) {
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                // Snooze 2 minutes in case cancel is ignored / reposted immediately
+                snoozeNotification(sbn.key, 2 * 60 * 1000L)
+            } catch (_: Exception) {
+            }
+        }
+    }
 
-        val pkgHit = PKG_HINTS.any { pkg.contains(it) }
+    /**
+     * Broader than "must say voicemail" — Samsung often uses dialer package +
+     * "Voice message" / "1 new message" / channel ids without the word voicemail.
+     */
+    private fun looksLikeVoicemailOrPhoneMessage(
+        sbn: StatusBarNotification,
+        textRaw: String,
+        channelRaw: String,
+        pkgRaw: String
+    ): Boolean {
+        val pkg = pkgRaw.lowercase()
+        val text = textRaw.lowercase()
+        val channel = channelRaw.lowercase()
+        val category = sbn.notification?.category
+
+        // Ongoing call UI — never touch
+        if (sbn.isOngoing && (
+                text.contains("calling") ||
+                    text.contains("mobile network") ||
+                    category == Notification.CATEGORY_CALL
+                )
+        ) {
+            return false
+        }
+
         val textHit = VM_TEXT_HINTS.any { text.contains(it) } ||
             VM_TEXT_HINTS.any { channel.contains(it) }
-        val category = sbn.notification?.category
-        val categoryHit = category == Notification.CATEGORY_MESSAGE && textHit
-
         if (textHit) return true
-        if (pkgHit && (textHit || channel.contains("voice") || text.contains("message"))) {
-            return textHit || channel.contains("voice") || channel.contains("vm") ||
-                text.contains("voice") || text.contains("mail")
+
+        val pkgPhoneLike = PHONE_PKG_HINTS.any { pkg.contains(it) }
+        if (!pkgPhoneLike) {
+            // Non-phone packages: only if strong VM wording (already handled) 
+            return false
         }
-        return categoryHit
+
+        // Phone/dialer package + message-ish signal
+        val softText =
+            text.contains("message") ||
+                text.contains("mail") ||
+                text.contains("voice") ||
+                text.contains("vm") ||
+                text.contains("msg") ||
+                channel.contains("message") ||
+                channel.contains("mail") ||
+                channel.contains("voice") ||
+                channel.contains("vm") ||
+                channel.contains("vvm")
+
+        if (softText) return true
+
+        // Samsung often posts bare "Voicemail" icon updates with empty/minimal text
+        // from dialer after a missed/rejected call. If we recently blocked, treat
+        // CATEGORY_MESSAGE / CATEGORY_EVENT from phone packages as VM candidates.
+        if (category == Notification.CATEGORY_MESSAGE ||
+            category == Notification.CATEGORY_EVENT ||
+            category == Notification.CATEGORY_SOCIAL
+        ) {
+            return true
+        }
+
+        // Last-resort for phone packages after a recent block: short generic
+        // notifications with no clear call-in-progress wording.
+        if (RecentScreenedCalls.hasRecentBlocked(this) &&
+            !text.contains("missed call") &&
+            !text.contains("calling") &&
+            !text.contains("ringing") &&
+            text.length <= 80
+        ) {
+            // Only if channel or extras hint at voicemail-ish system UI
+            if (channel.isNotBlank() || text.isNotBlank()) {
+                return channel.contains("phone") ||
+                    channel.contains("call") ||
+                    channel.contains("status") ||
+                    text.contains("new") ||
+                    text.isBlank()
+            }
+        }
+
+        return false
     }
 
     private fun notificationText(sbn: StatusBarNotification): String {
         val n = sbn.notification ?: return ""
         val extras = n.extras ?: return n.tickerText?.toString().orEmpty()
-        val parts = listOfNotNull(
-            extras.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
-            extras.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
-            extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
-            extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
-            extras.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString(),
-            n.tickerText?.toString()
-        )
-        val lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
-        val lineText = lines?.joinToString(" ") { it?.toString().orEmpty() }.orEmpty()
-        return (parts.joinToString(" ") + " " + lineText).trim()
+        val parts = mutableListOf<String>()
+        fun add(key: String) {
+            extras.getCharSequence(key)?.toString()?.let { if (it.isNotBlank()) parts += it }
+        }
+        add(Notification.EXTRA_TITLE)
+        add(Notification.EXTRA_TEXT)
+        add(Notification.EXTRA_BIG_TEXT)
+        add(Notification.EXTRA_SUB_TEXT)
+        add(Notification.EXTRA_INFO_TEXT)
+        add(Notification.EXTRA_SUMMARY_TEXT)
+        n.tickerText?.toString()?.let { if (it.isNotBlank()) parts += it }
+        extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.forEach { cs ->
+            cs?.toString()?.let { if (it.isNotBlank()) parts += it }
+        }
+        // People / messages style
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            @Suppress("UNCHECKED_CAST")
+            val messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+            // best-effort; ignore if unavailable
+            if (messages != null) {
+                parts += "messages(${messages.size})"
+            }
+        }
+        return parts.joinToString(" | ").trim()
     }
 
     private fun notificationChannelId(sbn: StatusBarNotification): String? {
@@ -149,36 +272,50 @@ class VoicemailNotificationListener : NotificationListenerService() {
     companion object {
         private const val TAG = "VmNotifListener"
 
-        private val PKG_HINTS = listOf(
+        private val PHONE_PKG_HINTS = listOf(
             "voicemail",
             "visualvoicemail",
             "vvm",
             "dialer",
             "telecom",
-            ".phone",
             "telephony",
-            "com.android.server.telecom",
-            "com.samsung.android.incallui",
-            "com.samsung.android.phone",
-            "com.google.android.dialer",
+            "telephonyui",
+            ".phone",
             "com.android.phone",
+            "com.android.server.telecom",
+            "com.samsung.android.dialer",
+            "com.samsung.android.incallui",
+            "com.samsung.android.app.telephonyui",
+            "com.samsung.android.phone",
+            "com.sec.android.app.clockpackage", // sometimes abused; keep soft
+            "com.google.android.dialer",
+            "com.google.android.apps.messaging",
             "com.verizon",
+            "com.vzw",
             "com.att",
             "com.tmobile",
-            "com.sprint"
+            "com.sprint",
+            "com.android.mms"
         )
 
         private val VM_TEXT_HINTS = listOf(
             "voicemail",
             "voice mail",
             "voice message",
+            "voice msg",
             "new voice",
             "visual voicemail",
             "left a message",
             "left you a message",
             "unread message",
+            "unread voicemail",
             "vmessage",
-            "vvm"
+            "vvm",
+            "voicenote",
+            "voice note",
+            "new message from", // some carriers
+            "1 new message",
+            "new messages"
         )
     }
 }

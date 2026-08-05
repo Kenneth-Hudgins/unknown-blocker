@@ -54,4 +54,8 @@
     <string name="status_notif_access_ok">● Notification access: granted</string>
     <string name="status_notif_access_missing">○ Notification access: NOT granted — open settings below</string>
     <string name="suppress_vm_needs_access">Turned on — grant Notification access so it can work</string>
+    <string name="probe_header">Notification listener log</string>
+    <string name="probe_help">Shows what alerts the app actually saw (package + text). After a blocked call leaves a VM, open the app and check whether anything was logged. Empty = listener not receiving notifications.</string>
+    <string name="clear_probe">Clear listener log</string>
+    <string name="probe_cleared">Listener log cleared</string>
 </resources>

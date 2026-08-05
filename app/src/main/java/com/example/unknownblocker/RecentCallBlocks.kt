@@ -162,7 +162,8 @@ object RecentScreenedCalls {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_RECENT, arr.toString())
-            .apply()
+            // Must be visible immediately to NotificationListenerService
+            .commit()
     }
 }
 

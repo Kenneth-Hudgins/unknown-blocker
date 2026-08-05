@@ -28,6 +28,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toggle: Switch
     private lateinit var suppressVmSwitch: Switch
     private lateinit var notificationAccessButton: Button
+    private lateinit var probeText: TextView
+    private lateinit var clearProbeButton: Button
     private lateinit var statusText: TextView
     private lateinit var logHeader: TextView
     private lateinit var emptyLogText: TextView
@@ -68,6 +70,8 @@ class MainActivity : AppCompatActivity() {
         toggle = findViewById(R.id.toggleSwitch)
         suppressVmSwitch = findViewById(R.id.suppressVmSwitch)
         notificationAccessButton = findViewById(R.id.notificationAccessButton)
+        probeText = findViewById(R.id.probeText)
+        clearProbeButton = findViewById(R.id.clearProbeButton)
         statusText = findViewById(R.id.statusText)
         logHeader = findViewById(R.id.logHeader)
         emptyLogText = findViewById(R.id.emptyLogText)
@@ -83,7 +87,7 @@ class MainActivity : AppCompatActivity() {
         suppressVmSwitch.isChecked = BlockerSettings.isSuppressVmNotificationsEnabled(this)
 
         toggle.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean(BlockerSettings.KEY_ENABLED, isChecked).apply()
+            BlockerSettings.setBlockingEnabled(this, isChecked)
             if (isChecked) {
                 requestPermissionsIfNeeded()
                 requestCallScreeningRole()
@@ -102,6 +106,12 @@ class MainActivity : AppCompatActivity() {
 
         notificationAccessButton.setOnClickListener {
             openNotificationAccessSettings()
+        }
+
+        clearProbeButton.setOnClickListener {
+            NotificationProbe.clear(this)
+            refreshProbe()
+            Toast.makeText(this, R.string.probe_cleared, Toast.LENGTH_SHORT).show()
         }
 
         addAreaCodeButton.setOnClickListener { addAreaCodeFromInput() }
@@ -135,6 +145,7 @@ class MainActivity : AppCompatActivity() {
             refreshStatus()
             refreshLog()
             refreshAreaCodes()
+            refreshProbe()
             Toast.makeText(this, R.string.refreshed, Toast.LENGTH_SHORT).show()
         }
 
@@ -160,6 +171,7 @@ class MainActivity : AppCompatActivity() {
         refreshStatus()
         refreshLog()
         refreshAreaCodes()
+        refreshProbe()
     }
 
     private fun openNotificationAccessSettings() {
@@ -272,6 +284,10 @@ class MainActivity : AppCompatActivity() {
         lines += getString(R.string.status_sms_note)
 
         statusText.text = lines.joinToString("\n")
+    }
+
+    private fun refreshProbe() {
+        probeText.text = NotificationProbe.formatForUi(this)
     }
 
     private fun refreshLog() {

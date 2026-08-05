@@ -16,6 +16,13 @@ object BlockerSettings {
             .getBoolean(KEY_ENABLED, false)
     }
 
+    fun setBlockingEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_ENABLED, enabled)
+            .commit()
+    }
+
     fun isSuppressVmNotificationsEnabled(context: Context): Boolean {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(KEY_SUPPRESS_VM_NOTIFICATIONS, false)
@@ -25,7 +32,7 @@ object BlockerSettings {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(KEY_SUPPRESS_VM_NOTIFICATIONS, enabled)
-            .apply()
+            .commit()
     }
 
     fun isNotificationListenerEnabled(context: Context): Boolean {

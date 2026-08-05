@@ -44,4 +44,24 @@
 
     <string name="type_call">Call</string>
     <string name="type_sms">SMS</string>
+
+    <string name="suppress_vm_label">Hide voicemail alerts after blocked calls</string>
+    <string name="suppress_vm_help">After a blocked call, mutes voicemail alerts until a VM looks like it came from a contact/allowed number (or a non-blocked caller rang more recently). Not a 15‑minute timer. Does not delete voicemails. Requires Notification access.</string>
+    <string name="open_notification_access">Notification access settings</string>
+    <string name="notification_listener_label">Unknown Blocker voicemail alerts</string>
+    <string name="status_suppress_vm_on">● Hide VM alerts: ON</string>
+    <string name="status_suppress_vm_off">○ Hide VM alerts: OFF</string>
+    <string name="status_vm_mute_armed">● VM mute: ACTIVE (waiting for allowed-looking VM)</string>
+    <string name="status_vm_mute_idle">○ VM mute: idle (arms on next blocked call)</string>
+    <string name="status_notif_access_ok">● Notification access: granted</string>
+    <string name="status_notif_access_missing">○ Notification access: NOT granted — open settings below</string>
+    <string name="suppress_vm_needs_access">Turned on — grant Notification access so it can work</string>
+
+    <string name="probe_header">Notification listener log</string>
+    <string name="probe_help">Writes listener events (with full timestamps) to a text file. Open it in a browser or text app after a blocked call leaves a VM. Empty file = listener not receiving notifications.</string>
+    <string name="open_probe_log">Open log file</string>
+    <string name="clear_probe">Clear log file</string>
+    <string name="probe_cleared">Listener log file cleared</string>
+    <string name="probe_empty">Log file is empty — nothing to open yet.</string>
+    <string name="probe_open_failed">Could not open log file. Try a text editor or file manager.</string>
 </resources>

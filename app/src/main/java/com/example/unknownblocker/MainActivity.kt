@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var suppressVmSwitch: Switch
     private lateinit var notificationAccessButton: Button
     private lateinit var probeStatusText: TextView
+    private lateinit var probeLoggingSwitch: Switch
     private lateinit var openProbeButton: Button
     private lateinit var clearProbeButton: Button
     private lateinit var statusText: TextView
@@ -77,7 +78,7 @@ class MainActivity : AppCompatActivity() {
         probeLoggingSwitch = findViewById(R.id.probeLoggingSwitch)
         openProbeButton = findViewById(R.id.openProbeButton)
         clearProbeButton = findViewById(R.id.clearProbeButton)
-
+        statusText = findViewById(R.id.statusText)
         logHeader = findViewById(R.id.logHeader)
         emptyLogText = findViewById(R.id.emptyLogText)
         blockedListContainer = findViewById(R.id.blockedListContainer)
@@ -109,16 +110,10 @@ class MainActivity : AppCompatActivity() {
             }
             refreshStatus()
         }
-        probeLoggingSwitch.setOnCheckedChangeListener(null)
-        probeLoggingSwitch.isChecked = BlockerSettings.isProbeLoggingEnabled(this)
-        probeLoggingSwitch.setOnCheckedChangeListener { _, isChecked ->
-            BlockerSettings.setProbeLoggingEnabled(this, isChecked)
-            refreshProbeStatus()
+
+        notificationAccessButton.setOnClickListener {
+            openNotificationAccessSettings()
         }
-        refreshStatus()
-        refreshLog()
-        refreshAreaCodes()
-        refreshProbeStatus()
 
         probeLoggingSwitch.setOnCheckedChangeListener { _, isChecked ->
             BlockerSettings.setProbeLoggingEnabled(this, isChecked)
@@ -191,6 +186,17 @@ class MainActivity : AppCompatActivity() {
                 openNotificationAccessSettings()
             }
             refreshStatus()
+        }
+        probeLoggingSwitch.setOnCheckedChangeListener(null)
+        probeLoggingSwitch.isChecked = BlockerSettings.isProbeLoggingEnabled(this)
+        probeLoggingSwitch.setOnCheckedChangeListener { _, isChecked ->
+            BlockerSettings.setProbeLoggingEnabled(this, isChecked)
+            refreshProbeStatus()
+            Toast.makeText(
+                this,
+                if (isChecked) R.string.probe_logging_on_toast else R.string.probe_logging_off_toast,
+                Toast.LENGTH_SHORT
+            ).show()
         }
         refreshStatus()
         refreshLog()

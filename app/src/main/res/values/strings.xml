@@ -59,7 +59,7 @@
 
     <string name="probe_header">Notification listener log</string>
     <string name="probe_logging_label">Write diagnostic log file</string>
-    <string name="probe_help">Off by default. When on, writes listener events (full timestamps) to a text file — useful if VM mute misbehaves. Auto-deletes at 2 MB. Open in a browser or text app.</string>
+    <string name="probe_help">For your diagnostics only. This app does not collect, upload, or share any data — logs stay on your phone in a local text file you control.\n\nOff by default. When on, writes listener events (with full timestamps) so you can debug VM mute issues. The log file is automatically deleted when it reaches 2 MB so it cannot grow forever or fill storage.\n\nDon\'t trust a random note in an app? Audit the open-source code yourself:\nhttps://github.com/Kenneth-Hudgins/unknown-blocker</string>
     <string name="open_probe_log">Open log file</string>
     <string name="clear_probe">Clear log file</string>
     <string name="probe_cleared">Listener log file cleared</string>

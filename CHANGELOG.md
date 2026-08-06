@@ -2,6 +2,27 @@
 
 All notable changes to **Unknown Blocker** are documented here.
 
+## [1.2.6] — 2026-08-05
+
+### Added / improved (since 1.2.3)
+
+- **Diagnostic log toggle** — “Write diagnostic log file” defaults to **OFF**; no listener log writes unless the user opts in
+- **Privacy note** in the log section: diagnostics only, no data collection/upload; tappable link to audit the open-source repo  
+  https://github.com/Kenneth-Hudgins/unknown-blocker
+- **2 MB auto-delete** of `notification_listener_log.txt` so the log cannot grow unbounded
+- Status line reflects Logging ON/OFF and approximate size
+
+### Unchanged
+
+- Call blocking (contacts + allowed area codes)
+- Sticky voicemail **notification** mute after blocked calls
+
+### Version
+
+- App version **1.2.6** (`versionCode` 9)
+
+---
+
 ## [1.2.3] — 2026-08-04
 
 Real-device validated on Galaxy S22+ (debug APK).

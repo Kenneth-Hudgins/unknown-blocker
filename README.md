@@ -4,12 +4,12 @@ Simple Android app that blocks **incoming calls from numbers not in your contact
 
 **Min Android:** 10 (API 29)  
 **Package:** `com.example.unknownblocker`  
-**Current version:** 1.2.3  
+**Current version:** 1.2.6  
 **Repo:** https://github.com/Kenneth-Hudgins/unknown-blocker
 
 ---
 
-## Features (v1.2.3)
+## Features (v1.2.6)
 
 ### Core (v1.0)
 
@@ -37,8 +37,11 @@ Simple Android app that blocks **incoming calls from numbers not in your contact
   - Arms on a blocked call — **not** a short timer
   - Stays muted until a VM looks like a contact/allowed caller (then alerts work again)
   - Does **not** delete carrier voicemail — only the notification
-- Scrollable main UI; notification listener log file (Open in another app)
-- Status: VM mute ACTIVE vs idle
+- Scrollable main UI; Status: VM mute ACTIVE vs idle
+- **Optional diagnostic listener log** (default **OFF**)
+  - On-device only; no upload/collection
+  - Auto-deletes at **2 MB**
+  - Privacy note + link to audit this repo
 
 ---
 

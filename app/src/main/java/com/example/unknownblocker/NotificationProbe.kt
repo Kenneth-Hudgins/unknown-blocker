@@ -11,10 +11,16 @@ import kotlin.concurrent.withLock
 /**
  * Append-only notification listener log written to app private storage.
  * Opened externally via FileProvider (text viewer / browser / share sheet).
+ *
+ * Caps: trims to [MAX_LINES] newest lines, and **deletes** the file if it
+ * reaches [MAX_BYTES] (2 MB) so it cannot grow without bound.
  */
 object NotificationProbe {
     const val LOG_FILE_NAME = "notification_listener_log.txt"
     private const val MAX_LINES = 400
+    /** Delete and start fresh when the log hits this size. */
+    private const val MAX_BYTES: Long = 2L * 1024L * 1024L // 2 MB
+
     private val lock = ReentrantLock()
 
     private val stampFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
@@ -40,7 +46,7 @@ object NotificationProbe {
         lock.withLock {
             val f = logFile(context)
             if (f.exists()) {
-                f.writeText("")
+                f.delete()
             }
         }
     }
@@ -62,19 +68,39 @@ object NotificationProbe {
 
     /** Short status for the main screen (not the full log body). */
     fun statusSummary(context: Context): String {
-        val n = lineCount(context)
-        return if (n == 0) {
-            "Log file empty — no listener events yet (or log was cleared)."
-        } else {
-            "Log file has $n line(s). Tap Open to view in another app."
+        val f = logFile(context)
+        if (!f.exists() || f.length() == 0L) {
+            return "Log file empty — no listener events yet (or log was cleared)."
         }
+        val n = lineCount(context)
+        val kb = f.length() / 1024L
+        return "Log file has $n line(s), ~${kb} KB (auto-deletes at 2 MB). Tap Open to view."
     }
 
     private fun appendLine(context: Context, line: String) {
         lock.withLock {
             try {
                 val f = logFile(context)
+                // Hit size cap → delete entire log, then write this event fresh.
+                if (f.exists() && f.length() >= MAX_BYTES) {
+                    f.delete()
+                    val stamp = stampFormat.format(Date())
+                    f.appendText(
+                        "$stamp | INFO | pkg= | ch=(none) | " +
+                            "log deleted after reaching 2 MB size limit\n"
+                    )
+                }
                 f.appendText(line + "\n")
+                // Safety: single huge write somehow still over cap
+                if (f.exists() && f.length() >= MAX_BYTES) {
+                    f.delete()
+                    val stamp = stampFormat.format(Date())
+                    f.appendText(
+                        "$stamp | INFO | pkg= | ch=(none) | " +
+                            "log deleted after reaching 2 MB size limit\n"
+                    )
+                    f.appendText(line + "\n")
+                }
                 trimIfNeeded(f)
             } catch (_: Exception) {
                 // Best-effort diagnostics; never crash the listener.
@@ -83,6 +109,15 @@ object NotificationProbe {
     }
 
     private fun trimIfNeeded(file: File) {
+        if (!file.exists()) return
+        // Prefer size delete over line trim when already huge
+        if (file.length() >= MAX_BYTES) {
+            try {
+                file.delete()
+            } catch (_: Exception) {
+            }
+            return
+        }
         val lines = try {
             file.readLines()
         } catch (_: Exception) {

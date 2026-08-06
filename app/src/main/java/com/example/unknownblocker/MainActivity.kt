@@ -74,9 +74,10 @@ class MainActivity : AppCompatActivity() {
         suppressVmSwitch = findViewById(R.id.suppressVmSwitch)
         notificationAccessButton = findViewById(R.id.notificationAccessButton)
         probeStatusText = findViewById(R.id.probeStatusText)
+        probeLoggingSwitch = findViewById(R.id.probeLoggingSwitch)
         openProbeButton = findViewById(R.id.openProbeButton)
         clearProbeButton = findViewById(R.id.clearProbeButton)
-        statusText = findViewById(R.id.statusText)
+
         logHeader = findViewById(R.id.logHeader)
         emptyLogText = findViewById(R.id.emptyLogText)
         blockedListContainer = findViewById(R.id.blockedListContainer)
@@ -89,6 +90,7 @@ class MainActivity : AppCompatActivity() {
 
         toggle.isChecked = prefs.getBoolean(BlockerSettings.KEY_ENABLED, false)
         suppressVmSwitch.isChecked = BlockerSettings.isSuppressVmNotificationsEnabled(this)
+        probeLoggingSwitch.isChecked = BlockerSettings.isProbeLoggingEnabled(this)
 
         toggle.setOnCheckedChangeListener { _, isChecked ->
             BlockerSettings.setBlockingEnabled(this, isChecked)
@@ -107,9 +109,25 @@ class MainActivity : AppCompatActivity() {
             }
             refreshStatus()
         }
+        probeLoggingSwitch.setOnCheckedChangeListener(null)
+        probeLoggingSwitch.isChecked = BlockerSettings.isProbeLoggingEnabled(this)
+        probeLoggingSwitch.setOnCheckedChangeListener { _, isChecked ->
+            BlockerSettings.setProbeLoggingEnabled(this, isChecked)
+            refreshProbeStatus()
+        }
+        refreshStatus()
+        refreshLog()
+        refreshAreaCodes()
+        refreshProbeStatus()
 
-        notificationAccessButton.setOnClickListener {
-            openNotificationAccessSettings()
+        probeLoggingSwitch.setOnCheckedChangeListener { _, isChecked ->
+            BlockerSettings.setProbeLoggingEnabled(this, isChecked)
+            refreshProbeStatus()
+            Toast.makeText(
+                this,
+                if (isChecked) R.string.probe_logging_on_toast else R.string.probe_logging_off_toast,
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
         openProbeButton.setOnClickListener { openProbeLogFile() }

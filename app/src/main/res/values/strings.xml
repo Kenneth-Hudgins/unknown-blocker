@@ -58,10 +58,13 @@
     <string name="suppress_vm_needs_access">Turned on — grant Notification access so it can work</string>
 
     <string name="probe_header">Notification listener log</string>
-    <string name="probe_help">Writes listener events (with full timestamps) to a text file. Open it in a browser or text app after a blocked call leaves a VM. Empty file = listener not receiving notifications.</string>
+    <string name="probe_logging_label">Write diagnostic log file</string>
+    <string name="probe_help">Off by default. When on, writes listener events (full timestamps) to a text file — useful if VM mute misbehaves. Auto-deletes at 2 MB. Open in a browser or text app.</string>
     <string name="open_probe_log">Open log file</string>
     <string name="clear_probe">Clear log file</string>
     <string name="probe_cleared">Listener log file cleared</string>
     <string name="probe_empty">Log file is empty — nothing to open yet.</string>
     <string name="probe_open_failed">Could not open log file. Try a text editor or file manager.</string>
+    <string name="probe_logging_on_toast">Diagnostic logging ON</string>
+    <string name="probe_logging_off_toast">Diagnostic logging OFF — no new events written</string>
 </resources>

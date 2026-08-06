@@ -34,6 +34,9 @@ object NotificationProbe {
         text: String,
         action: String
     ) {
+        // Default OFF — no writes unless the user enables diagnostic logging.
+        if (!BlockerSettings.isProbeLoggingEnabled(context)) return
+
         val stamp = stampFormat.format(Date())
         val pkgSafe = pkg.take(120).replace('\n', ' ')
         val chSafe = channel.take(80).replace('\n', ' ').ifBlank { "(none)" }
@@ -68,13 +71,16 @@ object NotificationProbe {
 
     /** Short status for the main screen (not the full log body). */
     fun statusSummary(context: Context): String {
+        if (!BlockerSettings.isProbeLoggingEnabled(context)) {
+            return "Logging OFF — nothing new is written. Turn on to diagnose VM mute."
+        }
         val f = logFile(context)
         if (!f.exists() || f.length() == 0L) {
-            return "Log file empty — no listener events yet (or log was cleared)."
+            return "Logging ON — log file empty (no events yet, or cleared)."
         }
         val n = lineCount(context)
         val kb = f.length() / 1024L
-        return "Log file has $n line(s), ~${kb} KB (auto-deletes at 2 MB). Tap Open to view."
+        return "Logging ON — $n line(s), ~${kb} KB (auto-deletes at 2 MB). Tap Open to view."
     }
 
     private fun appendLine(context: Context, line: String) {

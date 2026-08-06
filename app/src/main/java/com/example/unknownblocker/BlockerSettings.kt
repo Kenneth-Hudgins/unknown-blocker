@@ -12,6 +12,8 @@ object BlockerSettings {
     const val KEY_SUPPRESS_VM_NOTIFICATIONS = "suppress_vm_notifications"
     /** Sticky: after a blocked call, keep muting VM alerts until an allowed-looking VM. */
     const val KEY_VM_SUPPRESS_ARMED = "vm_suppress_armed"
+    /** Diagnostic listener log file — default OFF. */
+    const val KEY_PROBE_LOGGING = "probe_logging_enabled"
 
     fun isBlockingEnabled(context: Context): Boolean {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -89,5 +91,18 @@ object BlockerSettings {
 
     fun notificationListenerSettingsIntent(): Intent {
         return Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+    }
+
+    /** Diagnostic file logging for the notification listener. Defaults to OFF. */
+    fun isProbeLoggingEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_PROBE_LOGGING, false)
+    }
+
+    fun setProbeLoggingEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_PROBE_LOGGING, enabled)
+            .commit()
     }
 }

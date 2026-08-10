@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.unknownblocker"
         minSdk = 29
         targetSdk = 37
-        versionCode = 9
-        versionName = "1.2.6"
+        versionCode = 10
+        versionName = "1.2.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

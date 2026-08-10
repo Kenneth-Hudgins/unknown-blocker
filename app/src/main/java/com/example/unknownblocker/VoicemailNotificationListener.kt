@@ -168,7 +168,7 @@ class VoicemailNotificationListener : NotificationListenerService() {
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
-                snoozeNotification(sbn.key, 2 * 60 * 1000L)
+                snoozeNotification(sbn.key, 60 * 60 * 1000L) // 60 minutes (was 2m; media duck loop)
             } catch (_: Exception) {
             }
         }

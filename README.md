@@ -4,12 +4,27 @@ Simple Android app that blocks **incoming calls from numbers not in your contact
 
 **Min Android:** 10 (API 29)  
 **Package:** `com.example.unknownblocker`  
-**Current version:** 1.2.6  
+**Current version:** 1.2.7  
 **Repo:** https://github.com/Kenneth-Hudgins/unknown-blocker
+
 
 ---
 
-## Features (v1.2.6)
+## Download (sideload APK)
+
+Pre-built **release-signed** APKs are attached to [GitHub Releases](https://github.com/Kenneth-Hudgins/unknown-blocker/releases).
+
+1. Open the latest release and download `UnknownBlocker-1.x.x.apk` (or `app-release.apk`).
+2. On your phone: allow **Install unknown apps** for your browser/Files app.
+3. Open the APK → Install.
+4. If you previously installed a **debug** build from Android Studio, **uninstall it first** (different signature), then install the release APK.
+5. Open the app → Blocking ON → grant Call Screening (+ Notification access if using VM mute) → reboot recommended.
+
+Source stays free and open. No Play Store required. Signing details for maintainers: [docs/RELEASE-SIGNING.md](docs/RELEASE-SIGNING.md).
+
+---
+
+## Features (v1.2.7)
 
 ### Core (v1.0)
 

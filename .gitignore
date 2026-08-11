@@ -31,3 +31,8 @@ Thumbs.db
 .vscode/
 *.keystore
 *.jks
+# Release signing secrets (never commit)
+keystore.properties
+**/keystore.properties
+PASSWORDS.txt
+**/PASSWORDS.txt

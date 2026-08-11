@@ -2,6 +2,17 @@
 
 All notable changes to **Unknown Blocker** are documented here.
 
+## [1.2.7] — 2026-08-10
+
+### Changed
+- VM notification snooze extended to **60 minutes** (reduces media volume duck loop)
+- **Release-signed** APK available on GitHub Releases for public sideload
+
+### Version
+- App version **1.2.7** (`versionCode` 10)
+
+---
+
 ## [1.2.6] — 2026-08-05
 
 ### Added / improved (since 1.2.3)

@@ -156,6 +156,8 @@ class VoicemailNotificationListener : NotificationListenerService() {
     }
 
     private fun dismissHard(sbn: StatusBarNotification) {
+        // Cancel only — no snooze. Snooze was re-posting/ducking media on a timer.
+        // Sticky mute still re-cancels if the system posts a new VM alert while armed.
         try {
             cancelNotification(sbn.key)
         } catch (e: Exception) {
@@ -165,12 +167,6 @@ class VoicemailNotificationListener : NotificationListenerService() {
             @Suppress("DEPRECATION")
             cancelNotification(sbn.packageName, sbn.tag, sbn.id)
         } catch (_: Exception) {
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                snoozeNotification(sbn.key, 60 * 60 * 1000L) // 60 minutes (was 2m; media duck loop)
-            } catch (_: Exception) {
-            }
         }
     }
 

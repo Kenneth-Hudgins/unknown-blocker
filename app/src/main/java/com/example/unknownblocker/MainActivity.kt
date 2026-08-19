@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var toggle: Switch
     private lateinit var suppressVmSwitch: Switch
+    private lateinit var muteAllVmSwitch: Switch
     private lateinit var notificationAccessButton: Button
     private lateinit var probeStatusText: TextView
     private lateinit var probeLoggingSwitch: Switch
@@ -82,6 +83,7 @@ class MainActivity : AppCompatActivity() {
 
         toggle = findViewById(R.id.toggleSwitch)
         suppressVmSwitch = findViewById(R.id.suppressVmSwitch)
+        muteAllVmSwitch = findViewById(R.id.muteAllVmSwitch)
         notificationAccessButton = findViewById(R.id.notificationAccessButton)
         probeStatusText = findViewById(R.id.probeStatusText)
         probeLoggingSwitch = findViewById(R.id.probeLoggingSwitch)
@@ -102,6 +104,7 @@ class MainActivity : AppCompatActivity() {
 
         toggle.isChecked = prefs.getBoolean(BlockerSettings.KEY_ENABLED, false)
         suppressVmSwitch.isChecked = BlockerSettings.isSuppressVmNotificationsEnabled(this)
+        muteAllVmSwitch.isChecked = BlockerSettings.isMuteAllVmNotificationsEnabled(this)
         probeLoggingSwitch.isChecked = BlockerSettings.isProbeLoggingEnabled(this)
 
         toggle.setOnCheckedChangeListener { _, isChecked ->
@@ -115,6 +118,15 @@ class MainActivity : AppCompatActivity() {
 
         suppressVmSwitch.setOnCheckedChangeListener { _, isChecked ->
             BlockerSettings.setSuppressVmNotificationsEnabled(this, isChecked)
+            if (isChecked && !BlockerSettings.isNotificationListenerEnabled(this)) {
+                Toast.makeText(this, R.string.suppress_vm_needs_access, Toast.LENGTH_LONG).show()
+                openNotificationAccessSettings()
+            }
+            refreshStatus()
+        }
+
+        muteAllVmSwitch.setOnCheckedChangeListener { _, isChecked ->
+            BlockerSettings.setMuteAllVmNotificationsEnabled(this, isChecked)
             if (isChecked && !BlockerSettings.isNotificationListenerEnabled(this)) {
                 Toast.makeText(this, R.string.suppress_vm_needs_access, Toast.LENGTH_LONG).show()
                 openNotificationAccessSettings()
@@ -192,6 +204,16 @@ class MainActivity : AppCompatActivity() {
         suppressVmSwitch.isChecked = BlockerSettings.isSuppressVmNotificationsEnabled(this)
         suppressVmSwitch.setOnCheckedChangeListener { _, isChecked ->
             BlockerSettings.setSuppressVmNotificationsEnabled(this, isChecked)
+            if (isChecked && !BlockerSettings.isNotificationListenerEnabled(this)) {
+                Toast.makeText(this, R.string.suppress_vm_needs_access, Toast.LENGTH_LONG).show()
+                openNotificationAccessSettings()
+            }
+            refreshStatus()
+        }
+        muteAllVmSwitch.setOnCheckedChangeListener(null)
+        muteAllVmSwitch.isChecked = BlockerSettings.isMuteAllVmNotificationsEnabled(this)
+        muteAllVmSwitch.setOnCheckedChangeListener { _, isChecked ->
+            BlockerSettings.setMuteAllVmNotificationsEnabled(this, isChecked)
             if (isChecked && !BlockerSettings.isNotificationListenerEnabled(this)) {
                 Toast.makeText(this, R.string.suppress_vm_needs_access, Toast.LENGTH_LONG).show()
                 openNotificationAccessSettings()
@@ -351,12 +373,18 @@ class MainActivity : AppCompatActivity() {
         } else {
             getString(R.string.status_area_codes, areaCodes.joinToString(", "))
         }
+        val muteAllVm = BlockerSettings.isMuteAllVmNotificationsEnabled(this)
+        lines += if (muteAllVm) {
+            getString(R.string.status_mute_all_vm_on)
+        } else {
+            getString(R.string.status_mute_all_vm_off)
+        }
         lines += if (suppressVm) {
             getString(R.string.status_suppress_vm_on)
         } else {
             getString(R.string.status_suppress_vm_off)
         }
-        if (suppressVm) {
+        if (suppressVm && !muteAllVm) {
             lines += if (BlockerSettings.isVmSuppressArmed(this)) {
                 getString(R.string.status_vm_mute_armed)
             } else {

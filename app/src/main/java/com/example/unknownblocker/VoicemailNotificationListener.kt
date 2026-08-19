@@ -9,13 +9,13 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 
 /**
- * Best-effort dismissal of voicemail-looking notifications after blocked calls.
+ * Best-effort dismissal of voicemail-looking notifications.
  *
- * Sticky mode (feature toggle ON):
- * - A **blocked call** ARMs mute (no 15‑minute expiry).
- * - While ARMED, VM-looking alerts are dismissed unless they look like a
- *   **non-blocked / allowed** caller — then we KEEP the alert and DISARM.
- * - Ambiguous VMs (no usable number) stay muted while armed.
+ * Two modes (independent):
+ * 1) **Mute all VM alerts** (toggle): while ON, every VM-looking notification is
+ *    canceled until the user turns it off (no re-enable on contact calls/texts).
+ * 2) **Sticky after blocked call** (toggle): a blocked call ARMs mute; while
+ *    ARMED, VM alerts are dismissed unless they look allowed — then KEEP+DISARM.
  */
 class VoicemailNotificationListener : NotificationListenerService() {
 
@@ -36,9 +36,11 @@ class VoicemailNotificationListener : NotificationListenerService() {
         if (sbn == null) return
         evaluate(sbn, fromPosted = true)
         // Samsung sometimes mutates/republishes VM alerts; re-check shortly after.
-        if (BlockerSettings.isSuppressVmNotificationsEnabled(this) &&
-            BlockerSettings.isVmSuppressArmed(this)
-        ) {
+        val shouldRetry =
+            BlockerSettings.isMuteAllVmNotificationsEnabled(this) ||
+                (BlockerSettings.isSuppressVmNotificationsEnabled(this) &&
+                    BlockerSettings.isVmSuppressArmed(this))
+        if (shouldRetry) {
             handler.postDelayed({
                 try {
                     evaluate(sbn, fromPosted = false)
@@ -62,7 +64,9 @@ class VoicemailNotificationListener : NotificationListenerService() {
             val channel = notificationChannelId(sbn).orEmpty()
             val pkg = sbn.packageName.orEmpty()
 
-            if (!BlockerSettings.isSuppressVmNotificationsEnabled(this)) return
+            val muteAll = BlockerSettings.isMuteAllVmNotificationsEnabled(this)
+            val stickyOn = BlockerSettings.isSuppressVmNotificationsEnabled(this)
+            if (!muteAll && !stickyOn) return
             if (!looksLikeVoicemailOrPhoneMessage(sbn, text, channel, pkg)) return
 
             val decision = decide(sbn, text, channel, pkg)
@@ -72,7 +76,7 @@ class VoicemailNotificationListener : NotificationListenerService() {
                 channel,
                 text,
                 when (decision) {
-                    Decision.DISMISS -> "DISMISS"
+                    Decision.DISMISS -> if (muteAll) "DISMISS-ALL" else "DISMISS"
                     Decision.KEEP -> "KEEP"
                     Decision.KEEP_AND_DISARM -> "KEEP+DISARM"
                     Decision.IGNORE -> "IGNORE"
@@ -104,7 +108,7 @@ class VoicemailNotificationListener : NotificationListenerService() {
         KEEP,
         /** Show the notification and clear sticky mute */
         KEEP_AND_DISARM,
-        /** Hide the notification; stay armed */
+        /** Hide the notification; stay armed / mute-all */
         DISMISS
     }
 
@@ -114,6 +118,11 @@ class VoicemailNotificationListener : NotificationListenerService() {
         channel: String,
         pkg: String
     ): Decision {
+        // Continuous mute wins: hide every VM-looking alert until user turns it off.
+        if (BlockerSettings.isMuteAllVmNotificationsEnabled(this)) {
+            return Decision.DISMISS
+        }
+
         if (!BlockerSettings.isBlockingEnabled(this)) return Decision.KEEP
         if (!BlockerSettings.isSuppressVmNotificationsEnabled(this)) return Decision.KEEP
         if (!BlockerSettings.isVmSuppressArmed(this)) {

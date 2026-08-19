@@ -62,6 +62,21 @@
             android:text="@string/suppress_vm_help"
             android:textSize="12sp" />
 
+        <Switch
+            android:id="@+id/muteAllVmSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/mute_all_vm_label"
+            android:textSize="15sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/mute_all_vm_help"
+            android:textSize="12sp" />
+
         <Button
             android:id="@+id/notificationAccessButton"
             style="?android:attr/buttonBarButtonStyle"

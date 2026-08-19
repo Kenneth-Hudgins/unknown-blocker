@@ -14,10 +14,12 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -37,9 +39,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var logHeader: TextView
     private lateinit var emptyLogText: TextView
+    private lateinit var blockedHistoryScroll: ScrollView
     private lateinit var blockedListContainer: LinearLayout
     private lateinit var clearLogButton: Button
     private lateinit var refreshButton: Button
+
     private lateinit var areaCodeInput: EditText
     private lateinit var addAreaCodeButton: Button
     private lateinit var areaCodesEmpty: TextView
@@ -49,6 +53,9 @@ class MainActivity : AppCompatActivity() {
     private val dateFormat: DateFormat by lazy {
         DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
     }
+
+    /** Day keys (yyyy-MM-dd) currently expanded in the blocked-calls list. */
+    private val expandedDayKeys = mutableSetOf<String>()
 
     private val requestPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -71,6 +78,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        BlockerSettings.ensureFirstOpenRecorded(this)
+
         toggle = findViewById(R.id.toggleSwitch)
         suppressVmSwitch = findViewById(R.id.suppressVmSwitch)
         notificationAccessButton = findViewById(R.id.notificationAccessButton)
@@ -81,9 +90,11 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         logHeader = findViewById(R.id.logHeader)
         emptyLogText = findViewById(R.id.emptyLogText)
+        blockedHistoryScroll = findViewById(R.id.blockedHistoryScroll)
         blockedListContainer = findViewById(R.id.blockedListContainer)
         clearLogButton = findViewById(R.id.clearLogButton)
         refreshButton = findViewById(R.id.refreshButton)
+
         areaCodeInput = findViewById(R.id.areaCodeInput)
         addAreaCodeButton = findViewById(R.id.addAreaCodeButton)
         areaCodesEmpty = findViewById(R.id.areaCodesEmpty)
@@ -367,28 +378,66 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshLog() {
-        val entries = BlockLog.load(this)
-        logHeader.text = getString(R.string.blocked_history_header, entries.size)
+        val days = BlockLog.loadCallDays(this)
+        val callCount = days.sumOf { it.count }
+        logHeader.text = getString(R.string.blocked_history_header, callCount)
         blockedListContainer.removeAllViews()
 
-        if (entries.isEmpty()) {
+        // Drop expand state for days that no longer exist
+        val validKeys = days.map { it.dayKey }.toSet()
+        expandedDayKeys.retainAll(validKeys)
+
+        if (days.isEmpty()) {
             emptyLogText.visibility = View.VISIBLE
-            blockedListContainer.visibility = View.GONE
+            blockedHistoryScroll.visibility = View.GONE
             return
         }
 
         emptyLogText.visibility = View.GONE
-        blockedListContainer.visibility = View.VISIBLE
+        blockedHistoryScroll.visibility = View.VISIBLE
         val inflater = LayoutInflater.from(this)
-        for (entry in entries) {
-            val row = inflater.inflate(R.layout.item_blocked_number, blockedListContainer, false)
-            row.findViewById<TextView>(R.id.itemNumber).text = entry.number
-            row.findViewById<TextView>(R.id.itemMeta).text = buildString {
-                append(if (entry.type == "sms") getString(R.string.type_sms) else getString(R.string.type_call))
-                append(" · ")
-                append(dateFormat.format(Date(entry.timestampMs)))
+
+        for (day in days) {
+            val dayRow = inflater.inflate(R.layout.item_blocked_day, blockedListContainer, false)
+            val header = dayRow.findViewById<LinearLayout>(R.id.dayHeaderRow)
+            val icon = dayRow.findViewById<TextView>(R.id.dayExpandIcon)
+            val label = dayRow.findViewById<TextView>(R.id.dayLabel)
+            val entriesContainer = dayRow.findViewById<LinearLayout>(R.id.dayEntriesContainer)
+
+            label.text = getString(R.string.blocked_day_row, day.label, day.count)
+            val expanded = day.dayKey in expandedDayKeys
+            icon.text = if (expanded) "▾" else "▸"
+            entriesContainer.visibility = if (expanded) View.VISIBLE else View.GONE
+
+            if (expanded) {
+                for (entry in day.entries) {
+                    val row = inflater.inflate(R.layout.item_blocked_number, entriesContainer, false)
+                    row.findViewById<TextView>(R.id.itemNumber).text = entry.number
+                    row.findViewById<TextView>(R.id.itemMeta).text = buildString {
+                        append(
+                            if (entry.type == "sms") {
+                                getString(R.string.type_sms)
+                            } else {
+                                getString(R.string.type_call)
+                            }
+                        )
+                        append(" · ")
+                        append(dateFormat.format(Date(entry.timestampMs)))
+                    }
+                    entriesContainer.addView(row)
+                }
             }
-            blockedListContainer.addView(row)
+
+            header.setOnClickListener {
+                if (day.dayKey in expandedDayKeys) {
+                    expandedDayKeys.remove(day.dayKey)
+                } else {
+                    expandedDayKeys.add(day.dayKey)
+                }
+                refreshLog()
+            }
+
+            blockedListContainer.addView(dayRow)
         }
     }
 

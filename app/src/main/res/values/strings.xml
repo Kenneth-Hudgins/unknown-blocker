@@ -30,9 +30,10 @@
     <string name="area_code_full">Too many area codes (max 50)</string>
     <string name="area_code_removed">Removed %1$s</string>
 
-    <string name="blocked_history_header_default">Blocked history (0)</string>
-    <string name="blocked_history_header">Blocked history (%1$d)</string>
-    <string name="empty_log">No blocked numbers yet.\nWhen a non-contact call is rejected, it will show up here.</string>
+    <string name="blocked_history_header_default">Blocked calls (0)</string>
+    <string name="blocked_history_header">Blocked calls (%1$d)</string>
+    <string name="blocked_day_row">%1$s (%2$d)</string>
+    <string name="empty_log">No blocked calls yet.\nWhen a non-contact call is rejected, it will show up here by day.</string>
     <string name="clear">Clear</string>
     <string name="refresh">Refresh</string>
     <string name="clear_log_title">Clear blocked history?</string>

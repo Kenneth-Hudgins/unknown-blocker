@@ -3,6 +3,10 @@ package com.example.unknownblocker
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Lightweight persistent log of blocked calls/SMS.
@@ -18,6 +22,17 @@ object BlockLog {
         val type: String, // "call" or "sms"
         val timestampMs: Long
     )
+
+    /** One calendar day of blocked calls (newest day first when listed). */
+    data class DayGroup(
+        /** Local calendar day key yyyy-MM-dd for expand state. */
+        val dayKey: String,
+        /** Display like 8/18/2026 */
+        val label: String,
+        val entries: List<Entry>
+    ) {
+        val count: Int get() = entries.size
+    }
 
     fun add(context: Context, number: String, type: String) {
         val cleaned = number.ifBlank { "Unknown" }
@@ -40,6 +55,36 @@ object BlockLog {
         }
     }
 
+    /** Blocked calls only (SMS omitted from history UI for now). */
+    fun loadCalls(context: Context): List<Entry> {
+        return load(context).filter { it.type.equals("call", ignoreCase = true) }
+    }
+
+    /**
+     * Days that have at least one blocked call, newest calendar day first.
+     * Entries within each day are newest-first.
+     */
+    fun loadCallDays(context: Context): List<DayGroup> {
+        val calls = loadCalls(context)
+        if (calls.isEmpty()) return emptyList()
+
+        val zone = TimeZone.getDefault()
+        val labelFmt = SimpleDateFormat("M/d/yyyy", Locale.US).apply { timeZone = zone }
+        val keyFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = zone }
+
+        // LinkedHashMap preserves first-seen order; calls are newest-first already.
+        val buckets = linkedMapOf<String, MutableList<Entry>>()
+        for (e in calls) {
+            val key = keyFmt.format(Date(e.timestampMs))
+            buckets.getOrPut(key) { mutableListOf() }.add(e)
+        }
+
+        return buckets.map { (key, list) ->
+            val label = labelFmt.format(Date(list.first().timestampMs))
+            DayGroup(dayKey = key, label = label, entries = list)
+        }
+    }
+
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
@@ -48,6 +93,8 @@ object BlockLog {
     }
 
     fun count(context: Context): Int = load(context).size
+
+    fun countCalls(context: Context): Int = loadCalls(context).size
 
     private fun serialize(entries: List<Entry>): String {
         val arr = JSONArray()

@@ -14,6 +14,8 @@ object BlockerSettings {
     const val KEY_VM_SUPPRESS_ARMED = "vm_suppress_armed"
     /** Diagnostic listener log file — default OFF. */
     const val KEY_PROBE_LOGGING = "probe_logging_enabled"
+    /** First app open (local install / upgrade marker), epoch ms. */
+    const val KEY_FIRST_OPEN_MS = "first_open_ms"
 
     fun isBlockingEnabled(context: Context): Boolean {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -104,5 +106,25 @@ object BlockerSettings {
             .edit()
             .putBoolean(KEY_PROBE_LOGGING, enabled)
             .commit()
+    }
+
+    /**
+     * Records first open if missing. Uses earliest blocked-log timestamp when
+     * available so upgrades inherit a sensible "install" day; else now.
+     */
+    fun ensureFirstOpenRecorded(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.contains(KEY_FIRST_OPEN_MS) && prefs.getLong(KEY_FIRST_OPEN_MS, 0L) > 0L) {
+            return
+        }
+        val fromLog = BlockLog.load(context).minOfOrNull { it.timestampMs }?.takeIf { it > 0L }
+        val ms = fromLog ?: System.currentTimeMillis()
+        prefs.edit().putLong(KEY_FIRST_OPEN_MS, ms).commit()
+    }
+
+    fun getFirstOpenMs(context: Context): Long {
+        ensureFirstOpenRecorded(context)
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getLong(KEY_FIRST_OPEN_MS, System.currentTimeMillis())
     }
 }

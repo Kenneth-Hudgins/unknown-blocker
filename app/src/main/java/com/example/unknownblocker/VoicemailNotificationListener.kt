@@ -154,6 +154,9 @@ class VoicemailNotificationListener : NotificationListenerService() {
     }
 
     private fun dismissHard(sbn: StatusBarNotification) {
+        // Clear the shade now, then ask the system not to show *this* notification
+        // again for SNOOZE_MS. Long duration avoids the old 2‑minute media-duck loop.
+        // New VM posts (new keys) can still appear; mute-all/sticky will handle those too.
         try {
             cancelNotification(sbn.key)
         } catch (e: Exception) {
@@ -163,6 +166,13 @@ class VoicemailNotificationListener : NotificationListenerService() {
             @Suppress("DEPRECATION")
             cancelNotification(sbn.packageName, sbn.tag, sbn.id)
         } catch (_: Exception) {
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                snoozeNotification(sbn.key, SNOOZE_MS)
+            } catch (e: Exception) {
+                Log.w(TAG, "snoozeNotification failed", e)
+            }
         }
     }
 

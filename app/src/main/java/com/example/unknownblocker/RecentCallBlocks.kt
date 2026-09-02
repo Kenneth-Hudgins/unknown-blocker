@@ -5,9 +5,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Short-lived memory of recently screened calls (blocked **and** allowed) so the
- * voicemail notification listener can decide whether an alert is likely spam-VM
- * vs a real person who was allowed through.
+ * Short-lived memory of recently **screened** calls (blocked **and** allowed).
+ *
+ * **Why:** [VoicemailNotificationListener] cannot know which caller left a VM.
+ * It only sees notification text. We correlate:
+ * - digits in the VM text vs recent blocked/allowed numbers
+ * - whether the latest screen was allow vs block (ambiguous VMs with no number)
+ *
+ * Sticky VM mute itself is **not** timed off by [WINDOW_MS]; the window only
+ * bounds how long numbers stay useful for text matching.
+ *
+ * Persistence uses [commit] so the listener process sees updates right after
+ * [ScreeningService] marks a call.
  */
 object RecentScreenedCalls {
     private const val PREFS_NAME = "blocker_prefs"
@@ -89,6 +98,10 @@ object RecentScreenedCalls {
     fun mostRecentAllowedAt(context: Context): Long? =
         load(context).filter { it.kind == Kind.ALLOWED }.maxOfOrNull { it.timestampMs }
 
+    /**
+     * True if [text] contains digit sequences matching a recent screened number of [kind].
+     * Compares last 10 / last 7 digits to tolerate formatting and country codes.
+     */
     fun textMentionsRecent(
         context: Context,
         text: String,

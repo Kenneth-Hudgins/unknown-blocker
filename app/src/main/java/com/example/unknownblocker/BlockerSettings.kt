@@ -6,20 +6,39 @@ import android.content.Intent
 import android.provider.Settings
 import android.text.TextUtils
 
+/**
+ * Central access to shared preferences for feature toggles and cross-component flags.
+ *
+ * **File:** all keys live in [PREFS_NAME] (`blocker_prefs`), shared with [BlockLog],
+ * [AreaCodeAllowlist], and [RecentScreenedCalls].
+ *
+ * **commit() vs apply():** several setters use [android.content.SharedPreferences.Editor.commit]
+ * so [VoicemailNotificationListener] (separate process binding) sees arm/disarm and
+ * mute-all changes immediately after a block or UI toggle.
+ *
+ * ## Feature map
+ * - [KEY_ENABLED] — master call/SMS blocking
+ * - [KEY_SUPPRESS_VM_NOTIFICATIONS] — sticky mute after a blocked call (user toggle)
+ * - [KEY_VM_SUPPRESS_ARMED] — runtime latch: armed on block, cleared on allowed-looking VM
+ * - [KEY_MUTE_ALL_VM_NOTIFICATIONS] — continuous mute-all VM alerts (user toggle, default off)
+ * - [KEY_PROBE_LOGGING] — write diagnostic listener log file (default off)
+ * - [KEY_FIRST_OPEN_MS] — first launch / upgrade marker for future “since install” UI
+ */
 object BlockerSettings {
     const val PREFS_NAME = "blocker_prefs"
     const val KEY_ENABLED = "enabled"
     const val KEY_SUPPRESS_VM_NOTIFICATIONS = "suppress_vm_notifications"
-    /** Sticky: after a blocked call, keep muting VM alerts until an allowed-looking VM. */
+    /** Sticky latch: after a blocked call, keep muting VM alerts until disarmed. */
     const val KEY_VM_SUPPRESS_ARMED = "vm_suppress_armed"
     /**
      * Continuous mute: while ON, dismiss all voicemail-looking notifications
-     * (spam and contacts) until the user turns it off. Default OFF.
+     * (including from “real” callers) until the user turns it off. Default OFF.
+     * Independent of sticky-after-block; when ON it wins in the listener.
      */
     const val KEY_MUTE_ALL_VM_NOTIFICATIONS = "mute_all_vm_notifications"
-    /** Diagnostic listener log file — default OFF. */
+    /** Diagnostic listener log file — default OFF (privacy). */
     const val KEY_PROBE_LOGGING = "probe_logging_enabled"
-
+    /** First app open (local install / upgrade marker), epoch ms. */
     const val KEY_FIRST_OPEN_MS = "first_open_ms"
 
     fun isBlockingEnabled(context: Context): Boolean {
@@ -31,7 +50,7 @@ object BlockerSettings {
         val ed = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_ENABLED, enabled)
         if (!enabled) {
-            // Blocking off → stop sticky VM mute
+            // Blocking off → stop sticky VM mute so we don't leave mute armed forever
             ed.putBoolean(KEY_VM_SUPPRESS_ARMED, false)
         }
         ed.commit()
@@ -76,7 +95,10 @@ object BlockerSettings {
             .getBoolean(KEY_VM_SUPPRESS_ARMED, false)
     }
 
-    /** Call when we block a call — start muting VM notifications. */
+    /**
+     * Called from [ScreeningService] when a call is blocked.
+     * No-op unless sticky VM feature is on and master blocking is on.
+     */
     fun armVmSuppress(context: Context) {
         if (!isSuppressVmNotificationsEnabled(context)) return
         if (!isBlockingEnabled(context)) return
@@ -87,7 +109,10 @@ object BlockerSettings {
         NotificationProbe.record(context, context.packageName, "", "vm suppress ARMED (blocked call)", "ARM")
     }
 
-    /** Call when we keep a VM that looks like a real/allowed caller. */
+    /**
+     * Called when we keep a VM that looks like a real/allowed caller (sticky mode only).
+     * Clears the armed latch so normal VM alerts work again until the next block.
+     */
     fun disarmVmSuppress(context: Context, reason: String) {
         if (!isVmSuppressArmed(context)) return
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -103,6 +128,10 @@ object BlockerSettings {
         )
     }
 
+    /**
+     * True if the user enabled our [VoicemailNotificationListener] in system settings.
+     * Required for any VM notification cancel/snooze to work.
+     */
     fun isNotificationListenerEnabled(context: Context): Boolean {
         val expected = ComponentName(context, VoicemailNotificationListener::class.java)
         val enabled = Settings.Secure.getString(

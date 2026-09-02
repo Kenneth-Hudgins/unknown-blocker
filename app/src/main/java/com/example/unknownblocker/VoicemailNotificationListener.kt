@@ -9,13 +9,27 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 
 /**
- * Best-effort dismissal of **voicemail** notifications (not SMS/chat).
+ * Best-effort dismissal of **voicemail** status-bar notifications (not SMS/chat).
  *
- * Two modes (independent):
- * 1) **Mute all VM alerts** (toggle): while ON, every voicemail-looking notification is
- *    canceled until the user turns it off (no re-enable on contact calls/texts).
- * 2) **Sticky after blocked call** (toggle): a blocked call ARMs mute; while
- *    ARMED, VM alerts are dismissed unless they look allowed — then KEEP+DISARM.
+ * ## Platform limits (read me before "fixing" permanence)
+ * - We cannot delete carrier voicemail or silence Phone channels from here.
+ * - We only cancelNotification + snoozeNotification (see SNOOZE_MS, 6 hours).
+ * - OEMs may post a **new** notification key later; mute-all/sticky will try again.
+ * - Requires user-granted Notification Listener access (re-toggle after APK updates).
+ *
+ * ## Two independent user modes (BlockerSettings)
+ * 1) Mute all VM alerts (default off): while ON, every voicemail-looking alert is
+ *    dismissed; contact calls/texts do **not** re-enable alerts.
+ * 2) Sticky after blocked call: ScreeningService arms mute on block; while ARMED,
+ *    dismiss unless the alert looks allowed → KEEP and disarm.
+ *
+ * ## Detection (looksLikeVoicemail)
+ * Must stay strict: messaging packages and plain "new message" SMS must never match.
+ * Early builds used CATEGORY_MESSAGE / bare "message" and muted contact texts — do not regress.
+ *
+ * ## Pipeline
+ * onNotificationPosted → evaluate → looksLikeVoicemail → decide → dismissHard
+ * Short delayed re-evals (0.75s / 2.5s) catch Samsung mutate/repost of the same alert.
  */
 class VoicemailNotificationListener : NotificationListenerService() {
 
@@ -102,9 +116,13 @@ class VoicemailNotificationListener : NotificationListenerService() {
     }
 
     private enum class Decision {
+        /** Not a candidate (should be rare; usually we return early). */
         IGNORE,
+        /** Leave notification visible; do not change sticky arm state. */
         KEEP,
+        /** Leave notification visible and clear sticky armed latch. */
         KEEP_AND_DISARM,
+        /** Cancel (+ snooze) the notification. */
         DISMISS
     }
 

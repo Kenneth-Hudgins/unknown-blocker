@@ -3,8 +3,12 @@ package com.example.unknownblocker
 import android.content.Context
 
 /**
- * User-managed NANP area codes that are always allowed through while blocking is on.
- * Example: "254" lets 254-xxx-xxxx and +1 254 xxx xxxx ring even if not in contacts.
+ * User-managed NANP (US/Canada-style) area codes that always ring while blocking is on.
+ *
+ * **Why:** Work help-desks / on-call ranges (e.g. `254`) should get through without
+ * adding every number as a contact. Does not require the number to be in contacts.
+ *
+ * Storage: StringSet in shared prefs [PREFS_NAME] / [KEY_CODES], max [MAX_CODES].
  */
 object AreaCodeAllowlist {
     private const val PREFS_NAME = "blocker_prefs"
@@ -35,6 +39,7 @@ object AreaCodeAllowlist {
         }
     }
 
+    /** True if [phoneNumber]'s NANP area code is on the allowlist. */
     fun matches(context: Context, phoneNumber: String): Boolean {
         val codes = load(context)
         if (codes.isEmpty()) return false
@@ -42,7 +47,10 @@ object AreaCodeAllowlist {
         return area in codes
     }
 
-    /** Digits only, optional leading country code 1 stripped for NANP. */
+    /**
+     * Digits only; strips a leading country-code `1` when present so
+     * `+1 254 555 0100` and `(254) 555-0100` both yield `254`.
+     */
     fun extractNanpAreaCode(phoneNumber: String): String? {
         var digits = phoneNumber.filter { it.isDigit() }
         if (digits.isEmpty()) return null
@@ -63,6 +71,7 @@ object AreaCodeAllowlist {
         }
     }
 
+    /** UI input → exactly 3 digits, or null if invalid. */
     fun normalizeCode(raw: String): String? {
         val digits = raw.filter { it.isDigit() }
         if (digits.length != 3) return null

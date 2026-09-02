@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Main scrollable screen (NoActionBar theme — title is in-layout).
+  Sections top→bottom: title, blocking + VM toggles, status, area codes,
+  blocked-call history (fixed-height inner scroll ~8 day rows), diagnostic log.
+-->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/mainScroll"
     android:layout_width="match_parent"

@@ -4,6 +4,15 @@ import android.content.Context
 import android.net.Uri
 import android.provider.ContactsContract
 
+/**
+ * Contact lookup helper for allow/block decisions.
+ *
+ * Uses [ContactsContract.PhoneLookup] so formatting differences (+1, dashes, etc.)
+ * are handled by the system provider when possible.
+ *
+ * **Permission:** requires READ_CONTACTS. On [SecurityException] we return false
+ * (unknown) so missing permission does not accidentally allow spam through.
+ */
 object ContactUtils {
     fun isNumberInContacts(context: Context, phoneNumber: String): Boolean {
         if (phoneNumber.isBlank()) return false

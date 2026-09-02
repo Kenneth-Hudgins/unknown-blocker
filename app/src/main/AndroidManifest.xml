@@ -21,7 +21,10 @@
             </intent-filter>
         </activity>
 
-        <!-- Call Screening Service -->
+        <!--
+        Call Screening is the only supported way to reject/silence non-contact calls
+        without replacing the dialer. User must set this app as the Call Screening app.
+        -->
         <service
             android:name=".ScreeningService"
             android:permission="android.permission.BIND_SCREENING_SERVICE"
@@ -31,7 +34,10 @@
             </intent-filter>
         </service>
 
-        <!-- Dismiss voicemail-looking notifications after blocked calls (optional) -->
+        <!--
+            Optional NotificationListenerService: cancel/snooze voicemail-looking alerts.
+            User must grant Notification access. Does not delete carrier voicemail.
+            -->
         <service
             android:name=".VoicemailNotificationListener"
             android:label="@string/notification_listener_label"
@@ -42,7 +48,9 @@
             </intent-filter>
         </service>
 
-        <!-- SMS Receiver -->
+        <!--
+            Best-effort SMS: abortBroadcast may hide some alerts; message still in default SMS app.
+            -->
         <receiver
             android:name=".SmsBlockerReceiver"
             android:exported="true">
@@ -51,6 +59,7 @@
             </intent-filter>
         </receiver>
 
+        <!-- Shares diagnostic log file to external viewers (exported=false). -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

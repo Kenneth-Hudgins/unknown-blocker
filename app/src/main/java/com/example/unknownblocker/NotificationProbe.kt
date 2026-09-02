@@ -9,11 +9,18 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 /**
- * Append-only notification listener log written to app private storage.
- * Opened externally via FileProvider (text viewer / browser / share sheet).
+ * Optional on-device diagnostic log for [VoicemailNotificationListener] decisions.
  *
- * Caps: trims to [MAX_LINES] newest lines, and **deletes** the file if it
- * reaches [MAX_BYTES] (2 MB) so it cannot grow without bound.
+ * **Privacy:** default OFF via [BlockerSettings.isProbeLoggingEnabled]. No upload —
+ * file stays in app private storage. User can open via FileProvider / share sheet.
+ *
+ * **Caps:**
+ * - Keep about [MAX_LINES] newest lines
+ * - **Delete** the whole file at [MAX_BYTES] (2 MB) so it cannot grow unbounded
+ *
+ * **Timestamps:** absolute local `yyyy-MM-dd HH:mm:ss` (not “N seconds ago”).
+ *
+ * Thread-safe with [lock] because the listener and UI may touch the file concurrently.
  */
 object NotificationProbe {
     const val LOG_FILE_NAME = "notification_listener_log.txt"
@@ -27,6 +34,10 @@ object NotificationProbe {
 
     fun logFile(context: Context): File = File(context.filesDir, LOG_FILE_NAME)
 
+    /**
+     * Append one event line if logging is enabled.
+     * @param action short tag e.g. DISMISS, DISMISS-ALL, KEEP, ARM, MUTE_ALL_ON
+     */
     fun record(
         context: Context,
         pkg: String,

@@ -9,8 +9,13 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Lightweight persistent log of blocked calls/SMS.
- * Stored in SharedPreferences as a JSON array (newest first), capped at [MAX_ENTRIES].
+ * Persistent in-app history of blocked calls/SMS (not the system call log).
+ *
+ * **Storage:** JSON array in prefs, newest first, capped at [MAX_ENTRIES].
+ * Cleared only by the user via MainActivity (does not affect contacts or phone log).
+ *
+ * **UI:** [loadCallDays] groups **calls only** by local calendar day for the
+ * expandable history list (`M/d/yyyy (count)`). SMS may still be stored for future use.
  */
 object BlockLog {
     private const val PREFS_NAME = "blocker_prefs"
@@ -19,15 +24,19 @@ object BlockLog {
 
     data class Entry(
         val number: String,
-        val type: String, // "call" or "sms"
+        /** `"call"` or `"sms"`. */
+        val type: String,
         val timestampMs: Long
     )
 
-    /** One calendar day of blocked calls (newest day first when listed). */
+    /**
+     * One calendar day of blocked calls for the expandable history UI.
+     * Days with zero calls are omitted (not shown as empty rows).
+     */
     data class DayGroup(
-        /** Local calendar day key yyyy-MM-dd for expand state. */
+        /** Local calendar day key `yyyy-MM-dd` (stable expand-state id). */
         val dayKey: String,
-        /** Display like 8/18/2026 */
+        /** Display label like `8/18/2026`. */
         val label: String,
         val entries: List<Entry>
     ) {
@@ -62,7 +71,7 @@ object BlockLog {
 
     /**
      * Days that have at least one blocked call, newest calendar day first.
-     * Entries within each day are newest-first.
+     * Entries within each day remain newest-first (same order as [load]).
      */
     fun loadCallDays(context: Context): List<DayGroup> {
         val calls = loadCalls(context)

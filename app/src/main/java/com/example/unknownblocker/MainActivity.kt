@@ -27,6 +27,20 @@ import androidx.core.content.FileProvider
 import java.text.DateFormat
 import java.util.Date
 
+/**
+ * Primary UI for Unknown Blocker.
+ *
+ * ## Maintainer map
+ * - Master Blocking toggle → BlockerSettings.setBlockingEnabled + role/permissions
+ * - Hide VM after blocked calls → sticky feature (KEY_SUPPRESS_VM_NOTIFICATIONS)
+ * - Mute all voicemail alerts → continuous mute (KEY_MUTE_ALL_VM_NOTIFICATIONS)
+ * - Area codes → AreaCodeAllowlist
+ * - Blocked history → BlockLog.loadCallDays expandable day rows (~8 visible in fixed-height scroll)
+ * - Diagnostic log → NotificationProbe + FileProvider open/clear (default logging OFF)
+ *
+ * onResume re-syncs switches from prefs (user may change Notification access in Settings)
+ * and refreshes status/history. Theme is NoActionBar; title lives in the layout.
+ */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var toggle: Switch
@@ -405,6 +419,11 @@ class MainActivity : AppCompatActivity() {
         probeStatusText.text = NotificationProbe.statusSummary(this)
     }
 
+    /**
+     * Rebuild blocked-call history: one row per day with blocks, newest first.
+     * Tap expands/collapses detail rows (number + type + time). SMS entries may
+     * exist in BlockLog but are not shown (loadCallDays is calls-only).
+     */
     private fun refreshLog() {
         val days = BlockLog.loadCallDays(this)
         val callCount = days.sumOf { it.count }

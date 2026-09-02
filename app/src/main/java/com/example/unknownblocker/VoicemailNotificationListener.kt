@@ -327,6 +327,9 @@ class VoicemailNotificationListener : NotificationListenerService() {
     companion object {
         private const val TAG = "VmNotifListener"
 
+        /** Hold off re-showing the same notification key after cancel (6 hours). */
+        private const val SNOOZE_MS: Long = 6L * 60L * 60L * 1000L
+
         /** Packages that deliver SMS/MMS/chat — never dismiss as "voicemail". */
         private val MESSAGING_PKG_HINTS = listOf(
             "apps.messaging",

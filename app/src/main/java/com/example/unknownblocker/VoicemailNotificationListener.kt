@@ -9,13 +9,13 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 
 /**
- * Best-effort dismissal of voicemail-looking notifications after blocked calls.
+ * Best-effort dismissal of **voicemail** notifications (not SMS/chat).
  *
- * Sticky mode (feature toggle ON):
- * - A **blocked call** ARMs mute (no 15‑minute expiry).
- * - While ARMED, VM-looking alerts are dismissed unless they look like a
- *   **non-blocked / allowed** caller — then we KEEP the alert and DISARM.
- * - Ambiguous VMs (no usable number) stay muted while armed.
+ * Two modes (independent):
+ * 1) **Mute all VM alerts** (toggle): while ON, every voicemail-looking notification is
+ *    canceled until the user turns it off (no re-enable on contact calls/texts).
+ * 2) **Sticky after blocked call** (toggle): a blocked call ARMs mute; while
+ *    ARMED, VM alerts are dismissed unless they look allowed — then KEEP+DISARM.
  */
 class VoicemailNotificationListener : NotificationListenerService() {
 
@@ -36,9 +36,11 @@ class VoicemailNotificationListener : NotificationListenerService() {
         if (sbn == null) return
         evaluate(sbn, fromPosted = true)
         // Samsung sometimes mutates/republishes VM alerts; re-check shortly after.
-        if (BlockerSettings.isSuppressVmNotificationsEnabled(this) &&
-            BlockerSettings.isVmSuppressArmed(this)
-        ) {
+        val shouldRetry =
+            BlockerSettings.isMuteAllVmNotificationsEnabled(this) ||
+                (BlockerSettings.isSuppressVmNotificationsEnabled(this) &&
+                    BlockerSettings.isVmSuppressArmed(this))
+        if (shouldRetry) {
             handler.postDelayed({
                 try {
                     evaluate(sbn, fromPosted = false)
@@ -62,8 +64,10 @@ class VoicemailNotificationListener : NotificationListenerService() {
             val channel = notificationChannelId(sbn).orEmpty()
             val pkg = sbn.packageName.orEmpty()
 
-            if (!BlockerSettings.isSuppressVmNotificationsEnabled(this)) return
-            if (!looksLikeVoicemailOrPhoneMessage(sbn, text, channel, pkg)) return
+            val muteAll = BlockerSettings.isMuteAllVmNotificationsEnabled(this)
+            val stickyOn = BlockerSettings.isSuppressVmNotificationsEnabled(this)
+            if (!muteAll && !stickyOn) return
+            if (!looksLikeVoicemail(sbn, text, channel, pkg)) return
 
             val decision = decide(sbn, text, channel, pkg)
             NotificationProbe.record(
@@ -72,7 +76,7 @@ class VoicemailNotificationListener : NotificationListenerService() {
                 channel,
                 text,
                 when (decision) {
-                    Decision.DISMISS -> "DISMISS"
+                    Decision.DISMISS -> if (muteAll) "DISMISS-ALL" else "DISMISS"
                     Decision.KEEP -> "KEEP"
                     Decision.KEEP_AND_DISARM -> "KEEP+DISARM"
                     Decision.IGNORE -> "IGNORE"
@@ -98,13 +102,9 @@ class VoicemailNotificationListener : NotificationListenerService() {
     }
 
     private enum class Decision {
-        /** Not a candidate / feature off path handled earlier */
         IGNORE,
-        /** Show the notification; leave arm state alone */
         KEEP,
-        /** Show the notification and clear sticky mute */
         KEEP_AND_DISARM,
-        /** Hide the notification; stay armed */
         DISMISS
     }
 
@@ -114,16 +114,19 @@ class VoicemailNotificationListener : NotificationListenerService() {
         channel: String,
         pkg: String
     ): Decision {
+        // Continuous mute wins: hide every VM alert until user turns it off.
+        if (BlockerSettings.isMuteAllVmNotificationsEnabled(this)) {
+            return Decision.DISMISS
+        }
+
         if (!BlockerSettings.isBlockingEnabled(this)) return Decision.KEEP
         if (!BlockerSettings.isSuppressVmNotificationsEnabled(this)) return Decision.KEEP
         if (!BlockerSettings.isVmSuppressArmed(this)) {
-            // Not armed — do not mute anything (wait for next blocked call).
             return Decision.KEEP
         }
 
         val now = System.currentTimeMillis()
 
-        // Allowed / contact / area-code number in the VM text → real person.
         if (RecentScreenedCalls.textMentionsRecent(
                 this, text, RecentScreenedCalls.Kind.ALLOWED, now
             )
@@ -134,7 +137,6 @@ class VoicemailNotificationListener : NotificationListenerService() {
             return Decision.KEEP_AND_DISARM
         }
 
-        // Explicit recently-blocked number → spam VM, stay armed.
         if (RecentScreenedCalls.textMentionsRecent(
                 this, text, RecentScreenedCalls.Kind.BLOCKED, now
             )
@@ -142,22 +144,19 @@ class VoicemailNotificationListener : NotificationListenerService() {
             return Decision.DISMISS
         }
 
-        // Ambiguous: no trustworthy number in the text.
-        // If a non-blocked call was screened *after* the last block, treat the
-        // next VM as likely theirs and unlock (covers VMs with no caller ID text).
         val lastAllowed = RecentScreenedCalls.mostRecentAllowedAt(this)
         val lastBlocked = RecentScreenedCalls.mostRecentBlockedAt(this)
         if (lastAllowed != null && lastBlocked != null && lastAllowed >= lastBlocked) {
             return Decision.KEEP_AND_DISARM
         }
 
-        // Still armed, no allowed signal → keep muting.
         return Decision.DISMISS
     }
 
     private fun dismissHard(sbn: StatusBarNotification) {
-        // Cancel only — no snooze. Snooze was re-posting/ducking media on a timer.
-        // Sticky mute still re-cancels if the system posts a new VM alert while armed.
+        // Clear the shade now, then ask the system not to show *this* notification
+        // again for SNOOZE_MS. Long duration avoids the old 2‑minute media-duck loop.
+        // New VM posts (new keys) can still appear; mute-all/sticky will handle those too.
         try {
             cancelNotification(sbn.key)
         } catch (e: Exception) {
@@ -168,9 +167,20 @@ class VoicemailNotificationListener : NotificationListenerService() {
             cancelNotification(sbn.packageName, sbn.tag, sbn.id)
         } catch (_: Exception) {
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                snoozeNotification(sbn.key, SNOOZE_MS)
+            } catch (e: Exception) {
+                Log.w(TAG, "snoozeNotification failed", e)
+            }
+        }
     }
 
-    private fun looksLikeVoicemailOrPhoneMessage(
+    /**
+     * True only for voicemail / visual-voicemail style alerts.
+     * Must NOT match ordinary SMS/MMS/chat from contacts or strangers.
+     */
+    private fun looksLikeVoicemail(
         sbn: StatusBarNotification,
         textRaw: String,
         channelRaw: String,
@@ -181,6 +191,10 @@ class VoicemailNotificationListener : NotificationListenerService() {
         val channel = channelRaw.lowercase()
         val category = sbn.notification?.category
 
+        // Never touch SMS / messaging apps — that was muting contact texts.
+        if (isMessagingPackage(pkg)) return false
+
+        // Active call UI
         if (sbn.isOngoing && (
                 text.contains("calling") ||
                     text.contains("mobile network") ||
@@ -190,51 +204,95 @@ class VoicemailNotificationListener : NotificationListenerService() {
             return false
         }
 
-        val textHit = VM_TEXT_HINTS.any { text.contains(it) } ||
-            VM_TEXT_HINTS.any { channel.contains(it) }
-        if (textHit) return true
+        // Missed-call banners are not voicemail
+        if (text.contains("missed call") || channel.contains("missed")) {
+            return false
+        }
 
-        val pkgPhoneLike = PHONE_PKG_HINTS.any { pkg.contains(it) }
-        if (!pkgPhoneLike) return false
-
-        val softText =
-            text.contains("message") ||
-                text.contains("mail") ||
-                text.contains("voice") ||
-                text.contains("vm") ||
-                text.contains("msg") ||
-                channel.contains("message") ||
-                channel.contains("mail") ||
-                channel.contains("voice") ||
-                channel.contains("vm") ||
-                channel.contains("vvm")
-
-        if (softText) return true
-
-        if (category == Notification.CATEGORY_MESSAGE ||
-            category == Notification.CATEGORY_EVENT ||
-            category == Notification.CATEGORY_SOCIAL
-        ) {
+        // Strong voicemail wording anywhere (title/body/channel)
+        if (hasStrongVoicemailHint(text) || hasStrongVoicemailHint(channel)) {
             return true
         }
 
-        // While sticky-armed, treat short generic phone-package alerts as candidates.
+        // Phone/dialer/carrier package + VM channel or voice-ish channel+text
+        if (!isPhoneOrCarrierPackage(pkg)) return false
+
+        if (hasVoicemailChannelHint(channel)) return true
+
+        // Soft: phone package + both channel and text lean "voice" (not bare "message")
+        val voiceishText =
+            text.contains("voice") ||
+                text.contains("vm") ||
+                text.contains("vvm") ||
+                text.contains("left a message") ||
+                text.contains("left you a message")
+        val voiceishChannel =
+            channel.contains("voice") ||
+                channel.contains("vm") ||
+                channel.contains("vvm") ||
+                channel.contains("mail") // voicemail channels often include "mail"
+        if (voiceishText && (voiceishChannel || channel.isBlank())) {
+            // Avoid plain SMS-style "new message" on a phone package
+            if (looksLikePlainSmsWording(text) && !hasStrongVoicemailHint(text)) {
+                return false
+            }
+            return true
+        }
+
+        // Sticky-armed only: short generic alerts from phone package (OEM VM with little text)
         if (BlockerSettings.isVmSuppressArmed(this) &&
-            !text.contains("missed call") &&
             !text.contains("calling") &&
             !text.contains("ringing") &&
+            !looksLikePlainSmsWording(text) &&
             text.length <= 80
         ) {
-            if (channel.isNotBlank() || text.isNotBlank()) {
-                return channel.contains("phone") ||
-                    channel.contains("call") ||
-                    channel.contains("status") ||
-                    text.contains("new") ||
-                    text.isBlank()
+            if (hasVoicemailChannelHint(channel)) return true
+            if (channel.contains("phone") || channel.contains("status")) {
+                // Only if not clearly a chat notification
+                if (category != Notification.CATEGORY_MESSAGE &&
+                    category != Notification.CATEGORY_SOCIAL
+                ) {
+                    return text.isBlank() ||
+                        text.contains("new") ||
+                        text.contains("voice") ||
+                        text.contains("mail")
+                }
             }
         }
 
         return false
+    }
+
+    private fun hasStrongVoicemailHint(s: String): Boolean {
+        return VM_STRONG_HINTS.any { s.contains(it) }
+    }
+
+    private fun hasVoicemailChannelHint(channel: String): Boolean {
+        if (channel.isBlank()) return false
+        return channel.contains("voicemail") ||
+            channel.contains("voice_mail") ||
+            channel.contains("voice-mail") ||
+            channel.contains("vvm") ||
+            channel.contains("visual_voicemail") ||
+            channel.contains("visualvoicemail") ||
+            (channel.contains("voice") && channel.contains("mail"))
+    }
+
+    private fun looksLikePlainSmsWording(text: String): Boolean {
+        if (hasStrongVoicemailHint(text)) return false
+        // Typical SMS preview patterns without "voice"
+        return (text.contains("message") || text.contains("msg") || text.contains("text")) &&
+            !text.contains("voice") &&
+            !text.contains("voicemail") &&
+            !text.contains("vvm")
+    }
+
+    private fun isMessagingPackage(pkg: String): Boolean {
+        return MESSAGING_PKG_HINTS.any { pkg.contains(it) }
+    }
+
+    private fun isPhoneOrCarrierPackage(pkg: String): Boolean {
+        return PHONE_OR_CARRIER_PKG_HINTS.any { pkg.contains(it) }
     }
 
     private fun notificationText(sbn: StatusBarNotification): String {
@@ -254,12 +312,7 @@ class VoicemailNotificationListener : NotificationListenerService() {
         extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.forEach { cs ->
             cs?.toString()?.let { if (it.isNotBlank()) parts += it }
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            val messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
-            if (messages != null) {
-                parts += "messages(${messages.size})"
-            }
-        }
+        // Do NOT treat EXTRA_MESSAGES as a voicemail signal (that's SMS/chat style).
         return parts.joinToString(" | ").trim()
     }
 
@@ -274,7 +327,32 @@ class VoicemailNotificationListener : NotificationListenerService() {
     companion object {
         private const val TAG = "VmNotifListener"
 
-        private val PHONE_PKG_HINTS = listOf(
+        /** Hold off re-showing the same notification key after cancel (6 hours). */
+        private const val SNOOZE_MS: Long = 6L * 60L * 60L * 1000L
+
+        /** Packages that deliver SMS/MMS/chat — never dismiss as "voicemail". */
+        private val MESSAGING_PKG_HINTS = listOf(
+            "apps.messaging",
+            "android.messaging",
+            "samsung.android.messaging",
+            "samsung.android.mms",
+            "com.android.mms",
+            "com.google.android.apps.messaging",
+            "com.android.messaging",
+            "messages",
+            ".mms",
+            "whatsapp",
+            "telegram",
+            "signal",
+            "facebook.orca",
+            "instagram",
+            "discord",
+            "snapchat",
+            "rcs"
+        )
+
+        /** Dialer / phone / telecom / carrier visual voicemail hosts. */
+        private val PHONE_OR_CARRIER_PKG_HINTS = listOf(
             "voicemail",
             "visualvoicemail",
             "vvm",
@@ -289,35 +367,33 @@ class VoicemailNotificationListener : NotificationListenerService() {
             "com.samsung.android.incallui",
             "com.samsung.android.app.telephonyui",
             "com.samsung.android.phone",
-            "com.sec.android.app.clockpackage",
             "com.google.android.dialer",
-            "com.google.android.apps.messaging",
             "com.verizon",
             "com.vzw",
             "com.att",
             "com.tmobile",
-            "com.sprint",
-            "com.android.mms"
+            "com.sprint"
         )
 
-        private val VM_TEXT_HINTS = listOf(
+        /** Phrases that clearly mean voicemail (not ordinary SMS). */
+        private val VM_STRONG_HINTS = listOf(
             "voicemail",
             "voice mail",
             "voice message",
             "voice msg",
             "new voice",
             "visual voicemail",
+            "visual voice",
             "left a message",
             "left you a message",
-            "unread message",
             "unread voicemail",
             "vmessage",
             "vvm",
             "voicenote",
             "voice note",
-            "new message from",
-            "1 new message",
-            "new messages"
+            "has a new voicemail",
+            "new voicemail",
+            "voicemails"
         )
     }
 }

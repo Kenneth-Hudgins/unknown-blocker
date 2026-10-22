@@ -2,6 +2,57 @@
 
 All notable changes to **Unknown Blocker** are documented here.
 
+## [1.3.3] — 2026-10-22
+
+Stable release of the feature line that was previously published as **v1.3.3-pre** / `1.3.3-snooze-6h`. Merged from `feat/blocked-history-by-date` into **`main`**.
+
+### Added
+
+- **Day-grouped blocked-call history** — days with blocks listed newest-first (e.g. `9/1/2026 (3)`); tap a day to expand number + time details. **Calls only** in the UI (SMS may still be logged internally).
+- **Mute all voicemail alerts** toggle (default **OFF**) — while ON, continuously dismisses voicemail-looking notifications until you turn it off. Contact calls/texts do **not** re-enable alerts. Independent of sticky after-block mute.
+- **First-open / install day** tracking (used for history context on upgrades).
+
+### Changed / fixed
+
+- **VM dismiss = cancel + 6-hour snooze** — reduces Phone/Visual Voicemail repost bounce after a dismiss (earlier short snoozes could duck media audio; 6h is the tuned value).
+- **SMS/chat are not treated as voicemail** when muting — tighter detection so mute-all / sticky modes do not cancel normal messaging notifications.
+- Sticky **hide VM after blocked call** still available when mute-all is off (arms on block; disarms on allowed-looking VM).
+
+### Device behavior note (expected)
+
+- When a call is blocked and logged, the **phone screen may briefly turn on** (or wake) as Android/the dialer registers the event. If you leave the phone alone, it should **go back to sleep / turn off like normal**. This is normal system behavior around screened/rejected calls — not a crash and not the app keeping the screen on.
+
+### Unchanged
+
+- Core blocking: contacts + allowed NANP area codes (e.g. `254`)
+- Free, no ads, no tracking, no network backend
+- Optional diagnostic listener log (default OFF, on-device only, 2 MB auto-wipe)
+- Cannot delete carrier voicemail — only best-effort **notification** mute
+
+### Version
+
+- App version **1.3.3** (`versionCode` 16)
+
+### Install notes
+
+- Prefer the **release-signed** APK from GitHub Releases to update over prior release builds (v1.2.x).
+- Debug-signed and release-signed builds **do not** update over each other — uninstall once if switching.
+- After install/update: re-confirm **Call Screening** + **Notification access** (for VM features), then **reboot** recommended.
+
+---
+
+## [1.2.8] — 2026-08-12
+
+### Changed
+
+- VM notification handling on `main`: **cancel without snooze** (interim line before 1.3.3’s 6-hour snooze returned on the feature branch)
+
+### Version
+
+- App version **1.2.8** (`versionCode` 11)
+
+---
+
 ## [1.2.7] — 2026-08-10
 
 ### Changed

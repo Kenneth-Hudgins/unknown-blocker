@@ -14,10 +14,12 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -29,6 +31,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var toggle: Switch
     private lateinit var suppressVmSwitch: Switch
+    private lateinit var muteAllVmSwitch: Switch
     private lateinit var notificationAccessButton: Button
     private lateinit var probeStatusText: TextView
     private lateinit var probeLoggingSwitch: Switch
@@ -37,9 +40,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var logHeader: TextView
     private lateinit var emptyLogText: TextView
+    private lateinit var blockedHistoryScroll: ScrollView
     private lateinit var blockedListContainer: LinearLayout
     private lateinit var clearLogButton: Button
     private lateinit var refreshButton: Button
+
     private lateinit var areaCodeInput: EditText
     private lateinit var addAreaCodeButton: Button
     private lateinit var areaCodesEmpty: TextView
@@ -49,6 +54,9 @@ class MainActivity : AppCompatActivity() {
     private val dateFormat: DateFormat by lazy {
         DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
     }
+
+    /** Day keys (yyyy-MM-dd) currently expanded in the blocked-calls list. */
+    private val expandedDayKeys = mutableSetOf<String>()
 
     private val requestPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -71,8 +79,11 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        BlockerSettings.ensureFirstOpenRecorded(this)
+
         toggle = findViewById(R.id.toggleSwitch)
         suppressVmSwitch = findViewById(R.id.suppressVmSwitch)
+        muteAllVmSwitch = findViewById(R.id.muteAllVmSwitch)
         notificationAccessButton = findViewById(R.id.notificationAccessButton)
         probeStatusText = findViewById(R.id.probeStatusText)
         probeLoggingSwitch = findViewById(R.id.probeLoggingSwitch)
@@ -81,9 +92,11 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         logHeader = findViewById(R.id.logHeader)
         emptyLogText = findViewById(R.id.emptyLogText)
+        blockedHistoryScroll = findViewById(R.id.blockedHistoryScroll)
         blockedListContainer = findViewById(R.id.blockedListContainer)
         clearLogButton = findViewById(R.id.clearLogButton)
         refreshButton = findViewById(R.id.refreshButton)
+
         areaCodeInput = findViewById(R.id.areaCodeInput)
         addAreaCodeButton = findViewById(R.id.addAreaCodeButton)
         areaCodesEmpty = findViewById(R.id.areaCodesEmpty)
@@ -91,6 +104,7 @@ class MainActivity : AppCompatActivity() {
 
         toggle.isChecked = prefs.getBoolean(BlockerSettings.KEY_ENABLED, false)
         suppressVmSwitch.isChecked = BlockerSettings.isSuppressVmNotificationsEnabled(this)
+        muteAllVmSwitch.isChecked = BlockerSettings.isMuteAllVmNotificationsEnabled(this)
         probeLoggingSwitch.isChecked = BlockerSettings.isProbeLoggingEnabled(this)
 
         toggle.setOnCheckedChangeListener { _, isChecked ->
@@ -104,6 +118,15 @@ class MainActivity : AppCompatActivity() {
 
         suppressVmSwitch.setOnCheckedChangeListener { _, isChecked ->
             BlockerSettings.setSuppressVmNotificationsEnabled(this, isChecked)
+            if (isChecked && !BlockerSettings.isNotificationListenerEnabled(this)) {
+                Toast.makeText(this, R.string.suppress_vm_needs_access, Toast.LENGTH_LONG).show()
+                openNotificationAccessSettings()
+            }
+            refreshStatus()
+        }
+
+        muteAllVmSwitch.setOnCheckedChangeListener { _, isChecked ->
+            BlockerSettings.setMuteAllVmNotificationsEnabled(this, isChecked)
             if (isChecked && !BlockerSettings.isNotificationListenerEnabled(this)) {
                 Toast.makeText(this, R.string.suppress_vm_needs_access, Toast.LENGTH_LONG).show()
                 openNotificationAccessSettings()
@@ -181,6 +204,16 @@ class MainActivity : AppCompatActivity() {
         suppressVmSwitch.isChecked = BlockerSettings.isSuppressVmNotificationsEnabled(this)
         suppressVmSwitch.setOnCheckedChangeListener { _, isChecked ->
             BlockerSettings.setSuppressVmNotificationsEnabled(this, isChecked)
+            if (isChecked && !BlockerSettings.isNotificationListenerEnabled(this)) {
+                Toast.makeText(this, R.string.suppress_vm_needs_access, Toast.LENGTH_LONG).show()
+                openNotificationAccessSettings()
+            }
+            refreshStatus()
+        }
+        muteAllVmSwitch.setOnCheckedChangeListener(null)
+        muteAllVmSwitch.isChecked = BlockerSettings.isMuteAllVmNotificationsEnabled(this)
+        muteAllVmSwitch.setOnCheckedChangeListener { _, isChecked ->
+            BlockerSettings.setMuteAllVmNotificationsEnabled(this, isChecked)
             if (isChecked && !BlockerSettings.isNotificationListenerEnabled(this)) {
                 Toast.makeText(this, R.string.suppress_vm_needs_access, Toast.LENGTH_LONG).show()
                 openNotificationAccessSettings()
@@ -340,12 +373,18 @@ class MainActivity : AppCompatActivity() {
         } else {
             getString(R.string.status_area_codes, areaCodes.joinToString(", "))
         }
+        val muteAllVm = BlockerSettings.isMuteAllVmNotificationsEnabled(this)
+        lines += if (muteAllVm) {
+            getString(R.string.status_mute_all_vm_on)
+        } else {
+            getString(R.string.status_mute_all_vm_off)
+        }
         lines += if (suppressVm) {
             getString(R.string.status_suppress_vm_on)
         } else {
             getString(R.string.status_suppress_vm_off)
         }
-        if (suppressVm) {
+        if (suppressVm && !muteAllVm) {
             lines += if (BlockerSettings.isVmSuppressArmed(this)) {
                 getString(R.string.status_vm_mute_armed)
             } else {
@@ -367,28 +406,66 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshLog() {
-        val entries = BlockLog.load(this)
-        logHeader.text = getString(R.string.blocked_history_header, entries.size)
+        val days = BlockLog.loadCallDays(this)
+        val callCount = days.sumOf { it.count }
+        logHeader.text = getString(R.string.blocked_history_header, callCount)
         blockedListContainer.removeAllViews()
 
-        if (entries.isEmpty()) {
+        // Drop expand state for days that no longer exist
+        val validKeys = days.map { it.dayKey }.toSet()
+        expandedDayKeys.retainAll(validKeys)
+
+        if (days.isEmpty()) {
             emptyLogText.visibility = View.VISIBLE
-            blockedListContainer.visibility = View.GONE
+            blockedHistoryScroll.visibility = View.GONE
             return
         }
 
         emptyLogText.visibility = View.GONE
-        blockedListContainer.visibility = View.VISIBLE
+        blockedHistoryScroll.visibility = View.VISIBLE
         val inflater = LayoutInflater.from(this)
-        for (entry in entries) {
-            val row = inflater.inflate(R.layout.item_blocked_number, blockedListContainer, false)
-            row.findViewById<TextView>(R.id.itemNumber).text = entry.number
-            row.findViewById<TextView>(R.id.itemMeta).text = buildString {
-                append(if (entry.type == "sms") getString(R.string.type_sms) else getString(R.string.type_call))
-                append(" · ")
-                append(dateFormat.format(Date(entry.timestampMs)))
+
+        for (day in days) {
+            val dayRow = inflater.inflate(R.layout.item_blocked_day, blockedListContainer, false)
+            val header = dayRow.findViewById<LinearLayout>(R.id.dayHeaderRow)
+            val icon = dayRow.findViewById<TextView>(R.id.dayExpandIcon)
+            val label = dayRow.findViewById<TextView>(R.id.dayLabel)
+            val entriesContainer = dayRow.findViewById<LinearLayout>(R.id.dayEntriesContainer)
+
+            label.text = getString(R.string.blocked_day_row, day.label, day.count)
+            val expanded = day.dayKey in expandedDayKeys
+            icon.text = if (expanded) "▾" else "▸"
+            entriesContainer.visibility = if (expanded) View.VISIBLE else View.GONE
+
+            if (expanded) {
+                for (entry in day.entries) {
+                    val row = inflater.inflate(R.layout.item_blocked_number, entriesContainer, false)
+                    row.findViewById<TextView>(R.id.itemNumber).text = entry.number
+                    row.findViewById<TextView>(R.id.itemMeta).text = buildString {
+                        append(
+                            if (entry.type == "sms") {
+                                getString(R.string.type_sms)
+                            } else {
+                                getString(R.string.type_call)
+                            }
+                        )
+                        append(" · ")
+                        append(dateFormat.format(Date(entry.timestampMs)))
+                    }
+                    entriesContainer.addView(row)
+                }
             }
-            blockedListContainer.addView(row)
+
+            header.setOnClickListener {
+                if (day.dayKey in expandedDayKeys) {
+                    expandedDayKeys.remove(day.dayKey)
+                } else {
+                    expandedDayKeys.add(day.dayKey)
+                }
+                refreshLog()
+            }
+
+            blockedListContainer.addView(dayRow)
         }
     }
 

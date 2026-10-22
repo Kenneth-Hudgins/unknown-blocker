@@ -4,7 +4,7 @@ Simple Android app that blocks **incoming calls from numbers not in your contact
 
 **Min Android:** 10 (API 29)  
 **Package:** `com.example.unknownblocker`  
-**Current version:** 1.2.7  
+**Current version:** 1.3.3  
 **Repo:** https://github.com/Kenneth-Hudgins/unknown-blocker
 
 
@@ -24,7 +24,7 @@ Source stays free and open. No Play Store required. Signing details for maintain
 
 ---
 
-## Features (v1.2.7)
+## Features (v1.3.3)
 
 ### Core (v1.0)
 
@@ -33,18 +33,16 @@ Source stays free and open. No Play Store required. Signing details for maintain
 - **Contacts always allowed** — anyone in your address book still rings
 - **Best-effort SMS handling** — limited by Android (non-default SMS apps cannot fully block texts)
 - **Privacy-first** — no network, no ads, no analytics; contacts stay on-device
-- **Debug APK install** — sideload/update over previous installs with the same package id
+- **Sideload APK** — release-signed builds on GitHub Releases; debug builds for Studio
 
 ### Added in v1.1.0
 
-- **Blocked call/SMS history** — in-app list under the toggle (number, type, timestamp; max 200)
+- **Blocked history** — number, type, timestamp (capped)
 - **Clear / refresh** history controls
 - **Status checklist** — blocking on/off, call-screening role, contacts/SMS permissions, allowed area codes
 - **Allowed area codes** — while blocking stays ON, entire NANP area codes (e.g. `254`) still ring even if not in contacts
 - **Add / remove area codes** in the UI (3-digit codes; handles `+1`, dashes, parentheses)
 - **Shared allow rules** — decision order: contacts → allowed area code → block
-- **Modern permission / role requests** (`ActivityResultLauncher` instead of deprecated APIs)
-- **Install / testing notes** from real device validation (see below)
 
 ### Added in v1.2.x
 
@@ -57,6 +55,18 @@ Source stays free and open. No Play Store required. Signing details for maintain
   - On-device only; no upload/collection
   - Auto-deletes at **2 MB**
   - Privacy note + link to audit this repo
+
+### Added in v1.3.3
+
+- **Day-grouped blocked-call history** — newest day first; tap a day to expand details (calls only in the list)
+- **Mute all voicemail alerts** toggle (default **OFF**) — continuous mute until you turn it off; contact calls/texts do not re-enable it
+- **VM dismiss = cancel + 6-hour snooze** — cuts down alert bounce after dismiss
+- **Safer VM detection** — SMS/chat notifications are not treated as voicemail
+- Sticky after-block mute still works when mute-all is off
+
+### Expected: brief screen wake on block
+
+When a spam/unknown call is blocked and registered, the **phone screen may light up briefly**. If you leave the device alone, it should **turn back off / sleep like normal**. That wake is normal Android/dialer behavior around screened calls — not the app forcing the display to stay on.
 
 ---
 
@@ -82,6 +92,14 @@ Tested by installing the debug APK as an **update** over the previous working bu
 | Timed 15‑min mute missed delayed spam VM | ❌ Observed — motivated sticky mute |
 | Sticky mute after block | ✅ Delayed VM alert suppressed while armed |
 | Real/allowed path | ✅ Designed to re-enable on allowed-looking VM |
+
+### v1.3.3 (history + mute-all + 6h snooze)
+
+| Check | Result |
+|--------|--------|
+| Day-grouped history + mute-all + SMS-safe VM mute | ✅ Feature line used on device |
+| Unwanted VM notifications for several days | ✅ User report on pre-release line before merge to main |
+| Brief screen on when a block is registered | ℹ️ Expected; screen returns to sleep if left alone |
 
 **Practical tip:** After installing or updating, **reboot the phone** (or re-confirm Call Screening role + Notification access), then verify with a real call before relying on it for on-call shifts.
 

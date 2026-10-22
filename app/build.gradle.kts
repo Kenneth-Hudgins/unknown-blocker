@@ -15,9 +15,9 @@ android {
         minSdk = 29
         targetSdk = 37
         versionCode = 16
-                versionName = "1.3.3"
+        versionName = "1.3.3"
 
-                testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // Optional release signing: projectRoot/keystore.properties (gitignored).

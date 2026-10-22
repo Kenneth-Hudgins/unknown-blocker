@@ -4,7 +4,7 @@ Simple Android app that blocks **incoming calls from numbers not in your contact
 
 **Min Android:** 10 (API 29)  
 **Package:** `com.example.unknownblocker`  
-**Current version:** 1.3.3  
+**Current version:** 2.0.0  
 **Repo:** https://github.com/Kenneth-Hudgins/unknown-blocker
 
 
@@ -24,7 +24,7 @@ Source stays free and open. No Play Store required. Signing details for maintain
 
 ---
 
-## Features (v1.3.3)
+## Features (v2.0.0)
 
 ### Core (v1.0)
 
@@ -55,6 +55,10 @@ Source stays free and open. No Play Store required. Signing details for maintain
   - On-device only; no upload/collection
   - Auto-deletes at **2 MB**
   - Privacy note + link to audit this repo
+
+### Added in v2.0.0
+
+- **Version footer** at the bottom of the main screen (name + version code from the installed APK)
 
 ### Added in v1.3.3
 

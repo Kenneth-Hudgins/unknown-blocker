@@ -102,6 +102,8 @@ class MainActivity : AppCompatActivity() {
         areaCodesEmpty = findViewById(R.id.areaCodesEmpty)
         areaCodesContainer = findViewById(R.id.areaCodesContainer)
 
+        bindAppVersionFooter()
+
         toggle.isChecked = prefs.getBoolean(BlockerSettings.KEY_ENABLED, false)
         suppressVmSwitch.isChecked = BlockerSettings.isSuppressVmNotificationsEnabled(this)
         muteAllVmSwitch.isChecked = BlockerSettings.isMuteAllVmNotificationsEnabled(this)
@@ -403,6 +405,28 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshProbeStatus() {
         probeStatusText.text = NotificationProbe.statusSummary(this)
+    }
+
+
+    /** Bottom-of-screen version note from PackageManager (tracks build.gradle versionName/code). */
+    private fun bindAppVersionFooter() {
+        val tv = findViewById<TextView>(R.id.appVersionText)
+        val versionName = try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+        } catch (_: Exception) {
+            "?"
+        }
+        val versionCode = try {
+            if (android.os.Build.VERSION.SDK_INT >= 28) {
+                packageManager.getPackageInfo(packageName, 0).longVersionCode.toInt()
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getPackageInfo(packageName, 0).versionCode
+            }
+        } catch (_: Exception) {
+            0
+        }
+        tv.text = getString(R.string.app_version_footer, versionName, versionCode)
     }
 
     private fun refreshLog() {

@@ -2,6 +2,33 @@
 
 All notable changes to **Unknown Blocker** are documented here.
 
+## [2.0.0] — 2026-10-22
+
+Major stable milestone: the full 1.3.x feature line on `main`, plus in-app version labeling.
+
+### Added
+
+- **In-app version footer** at the bottom of the main screen (`Version 2.0.0 (20)`), read from the installed package so sideload builds always show the real build.
+
+### Included from 1.3.x (now the 2.0 baseline)
+
+- Day-grouped blocked-call history (expand by day; calls only)
+- Mute all voicemail alerts (default OFF)
+- Sticky hide-VM-after-block
+- VM dismiss = cancel + 6-hour snooze
+- SMS/chat not treated as voicemail
+- Contacts + area-code allowlist blocking
+
+### Device behavior note
+
+- Screen may **briefly turn on** when a blocked call is registered; if left alone it turns back off / sleeps like normal.
+
+### Version
+
+- App version **2.0.0** (`versionCode` 20)
+
+---
+
 ## [1.3.3] — 2026-10-22
 
 Stable release of the feature line that was previously published as **v1.3.3-pre** / `1.3.3-snooze-6h`. Merged from `feat/blocked-history-by-date` into **`main`**.

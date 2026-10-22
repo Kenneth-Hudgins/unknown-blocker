@@ -268,5 +268,14 @@
                 android:text="@string/clear_probe" />
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/appVersionText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="center_horizontal"
+            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="12sp" />
+
     </LinearLayout>
 </ScrollView>

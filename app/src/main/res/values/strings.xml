@@ -3,6 +3,7 @@
     <string name="app_name">Unknown Blocker</string>
     <string name="app_title">Unknown Blocker</string>
     <string name="app_subtitle">Block calls (and best-effort SMS) from numbers not in your contacts. Allow whole area codes (e.g. work 254) while staying protected.</string>
+    <string name="app_version_footer">Version %1$s (%2$d)</string>
     <string name="toggle_label">Blocking</string>
 
     <string name="status_blocking_on">● Blocking: ON</string>
